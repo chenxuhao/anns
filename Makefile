@@ -2,7 +2,7 @@ include common.mk
 
 OBJS=data_loader.o
 INCS=pqueue.hh
-BIN=../bin/
+BIN=./bin/
 
 all: brute_force_cpu quantized_search_cpu
 
