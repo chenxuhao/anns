@@ -1,9 +1,10 @@
-#include "timer.h"
-#include "data_loader.hh"
+#include "timer.hpp"
+#include "graph.hpp"
+#include "data_loader.hpp"
 
 void kNN_search(int k, int qsize, int dim, size_t npoints,
                 const float *queries, const float *data_vectors,
-                result_t &results);
+                result_t &results, char *index);
 
 int main(int argc, char *argv[]) {
   if (argc < 7) {
@@ -22,7 +23,7 @@ int main(int argc, char *argv[]) {
   result_t results(qsize*k);
   Timer t;
   t.Start();
-  kNN_search(k, qsize, vecdim, dsize, queries, data_vectors, results);
+  kNN_search(k, qsize, vecdim, dsize, queries, data_vectors, results, argv[8]);
   t.Stop();
   auto runtime = t.Seconds();
   auto throughput = double(qsize) / runtime;

@@ -15,7 +15,7 @@
 #include <immintrin.h>
 #include <sys/resource.h>
 
-#include "timer.h"
+#include "timer.hpp"
 
 namespace utils {
 

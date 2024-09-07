@@ -1,5 +1,5 @@
-#include "data_loader.hh"
-#include "utils.hh"
+#include "data_loader.hpp"
+#include "utils.hpp"
 #include <cassert>
 
 data_loader::data_loader(int argc, char *argv[], std::string scheme) {

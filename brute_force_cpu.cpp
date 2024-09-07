@@ -1,5 +1,5 @@
 #include <queue>
-#include "utils.hh"
+#include "utils.hpp"
 #include "common.hpp"
 
 typedef std::pair<float, vid_t> ele_t;
@@ -7,7 +7,7 @@ typedef std::priority_queue<ele_t> pq_t;
 
 void kNN_search(int k, int qsize, int vecdim, size_t vecsize,
     const float *queries, const float *data_vectors,
-    result_t &results) {
+    result_t &results, char* index) {
   int num_threads;
   #pragma omp parallel
   {
