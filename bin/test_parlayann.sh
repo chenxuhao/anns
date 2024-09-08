@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DATA=siftsmall
-GRAPH=graph-nnd
+GRAPH=graph
 NQ=100
 NP=0.01
 

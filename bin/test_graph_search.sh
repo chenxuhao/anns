@@ -5,10 +5,10 @@ NQ=10000
 NP=1
 GRAPH=graph
 
-DATA=siftsmall
-NQ=100
-NP=0.01
-GRAPH=graph-nnd
+#DATA=siftsmall
+#NQ=100
+#NP=0.01
+#GRAPH=graph
 
 K=32
 DIM=128

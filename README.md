@@ -33,6 +33,14 @@ To get a larger dataset,
     $ wget ftp://ftp.irisa.fr/local/texmex/corpus/sift.tar.gz
     $ tar -xf sift.tar.gz
 
+To run the ParlayANN implementation:
+
+    $ cd data
+    $ cp /anvil/projects/x-cis220095/anns/data/sift/graph-d32* ./
+    $ make parlayann_cpu
+    $ cd bin/
+    $ ./test_parlayann.sh
+
 ## References
 
 [Billion-Scale Similarity Search with GPUs](https://arxiv.org/abs/1702.08734) [BigData] [Code](https://github.com/facebookresearch/faiss)

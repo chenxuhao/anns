@@ -24,8 +24,8 @@ ivf_flat_gpu: $(INCS) $(OBJS) ivf_flat_gpu.o kmeans_gpu.o tester.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) ivf_flat_gpu.o kmeans_gpu.o tester.o -o $@ $(LIBS) $(NVLIBS)
 	mv $@ $(BIN)
 
-graph_search_cpu: $(INCS) $(OBJS) bfs_cpu.o tester.o
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) bfs_cpu.o tester.o -o $@ $(LIBS)
+graph_search_cpu: $(INCS) $(OBJS) bfs_cpu.o tester.o $(GOBJS)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) bfs_cpu.o tester.o $(GOBJS) -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 graph_search_gpu: $(INCS) $(OBJS) bfs_gpu.o tester.o $(GOBJS)
