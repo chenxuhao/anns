@@ -5,9 +5,6 @@
 
 // vector id type
 using vid_t = unsigned;
-//using result_t = std::vector<std::vector<vid_t>>; 
-using result_t = std::vector<vid_t>; 
-
 typedef unsigned long long gpu_long_t;
 
 #define FULL_MASK 0xffffffff

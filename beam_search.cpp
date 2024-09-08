@@ -9,22 +9,6 @@
 #include "common.hpp"
 #include "distance.hpp"
 
-// This is not a good starting strategy
-inline std::vector<vid_t> get_init_nodes(Graph<vid_t> &g, int num) {
-  std::vector<vid_t> init_ids;
-  //init_ids.clear();
-  vid_t u = rand() % g.V();
-  std::set<vid_t> id_set;
-  for (size_t i=0; i<g[u].size(); i++) {
-    auto v = g[u][i];
-    if (id_set.find(v) == id_set.end()) {
-      id_set.insert(v);
-      init_ids.push_back(v);
-    }
-  }
-  return init_ids;
-}
-
 // main beam search
 template<typename indexType = vid_t, typename distanceType = float>
 std::pair<std::pair<std::vector<std::pair<indexType, distanceType>>, std::vector<std::pair<indexType, distanceType>>>, size_t>
@@ -41,8 +25,7 @@ beam_search(Graph<indexType> &G, std::vector<indexType> starting_points, QueryPa
     return a.second < b.second || (a.second == b.second && a.first < b.first);
   };
  
-  // used as a hash filter (can give false negative -- i.e. can say
-  // not in table when it is)
+  // used as a hash filter (can give false negative -- i.e. can say not in table when it is)
   int bits = std::max<int>(10, std::ceil(std::log2(QP.beamSize * QP.beamSize)) - 2);
   std::vector<indexType> hash_filter(1 << bits, -1);
   auto has_been_seen = [&](indexType a) -> bool {
@@ -93,10 +76,9 @@ beam_search(Graph<indexType> &G, std::vector<indexType> starting_points, QueryPa
     visited.insert(std::upper_bound(visited.begin(), visited.end(), current, less), current);
     num_visited++;
 
-    // keep neighbors that have not been visited (using approximate
-    // hash). Note that if a visited node is accidentally kept due to
-    // approximate hash it will be removed below by the union or will
-    // not bump anyone else.
+    // keep neighbors that have not been visited (using approximate hash).
+    // Note that if a visited node is accidentally kept due to approximate
+    // hash it will be removed below by the union or will not bump anyone else.
     candidates.clear();
     keep.clear();
     long num_elts = std::min<long>(G[current.first].size(), QP.degree_limit);
