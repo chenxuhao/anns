@@ -27,9 +27,9 @@ struct QueryParams{
   QueryParams() {}
 };
 
-template <typename T>
-T* kmean_cluster(size_t npoints, int dim, int nclusters, size_t threshold,
-                 const T* features, std::vector<int> &membership, int iterations = 500);
+//template <typename T>
+//T* kmean_cluster(size_t npoints, int dim, int nclusters, size_t threshold,
+//                 const T* features, std::vector<int> &membership, int iterations = 500);
  
 template <typename T>
 class vector_dataset {

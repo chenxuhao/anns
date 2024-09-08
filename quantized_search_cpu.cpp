@@ -17,7 +17,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   int nclusters = 256;
   Quantizer<T> quantizer(m, nclusters, dim, npoints, data_vectors);
 
-  printf("Start search\n");
+  //printf("Start search\n");
   #pragma omp parallel for
   for (int qid = 0; qid < qsize; ++qid) {
     auto query = queries + dim * qid;

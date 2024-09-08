@@ -1,23 +1,23 @@
 include common.mk
 
-OBJS=#data_loader.o
+OBJS=
 GOBJS=VertexSet.o
 INCS=pqueue.hpp
 BIN=./bin/
 
-all: brute_force_cpu quantized_search_cpu
+all: brute_force_cpu quantized_search_cpu ivf_flat_cpu
 g-ann: graph_search_cpu parlayann_cpu
 
 brute_force_cpu: $(INCS) $(OBJS) brute_force_cpu.o tester.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) brute_force_cpu.o tester.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-quantized_search_cpu: $(INCS) $(OBJS) quantized_search_cpu.o tester.o kmeans.o
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) quantized_search_cpu.o tester.o kmeans.o -o $@ $(LIBS)
+quantized_search_cpu: $(INCS) $(OBJS) quantized_search_cpu.o tester.o 
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) quantized_search_cpu.o tester.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
-ivf_flat_cpu: $(INCS) $(OBJS) ivf_flat_cpu.o kmeans.o tester.o
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) ivf_flat_cpu.o kmeans.o tester.o -o $@ $(LIBS)
+ivf_flat_cpu: $(INCS) $(OBJS) ivf_flat_cpu.o tester.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) ivf_flat_cpu.o tester.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 ivf_flat_gpu: $(INCS) $(OBJS) ivf_flat_gpu.o kmeans_gpu.o tester.o

@@ -1,6 +1,7 @@
 #include <cstring>
 #include <algorithm>
 #include "utils.hpp"
+#include "kmeans.hpp"
 
 using namespace std;
 
@@ -30,11 +31,10 @@ public:
     for (int i = 0; i < m; i++)
       lookup_table[i].resize(nclusters);
 
-    int iterations = 200;
     printf("Train centroid ... \n");
     Timer t;
     t.Start();
-    train_centroids(data_vectors, iterations);
+    train_centroids(data_vectors);
     t.Stop();
     printf("time = %f\n", t.Seconds());
 
@@ -51,9 +51,9 @@ public:
     }
   }
 
-  void train_centroids(const T *data, int iterations = 200) {
-    vector<T> subvectors(sub_dim*n);
-    size_t threshold = n / 10000;
+  void train_centroids(const T *data) {
+    //vector<T> subvectors(sub_dim*n);
+    T* subvectors = (T*)aligned_alloc(32, n*sub_dim*sizeof(T));
     // for each subvector space
     for (int i = 0; i < m; i++) {
       // i-th sub-vector
@@ -63,14 +63,14 @@ public:
         std::memcpy(&subvectors[j*sub_dim], start+j*dim, sub_dim*sizeof(T));
       std::vector<int> membership(n);
       // find the centroids in the i-th subvector space using k-means clustering
-      centroids[i] = kmean_cluster<T>(n, sub_dim, nclusters, threshold, &subvectors[0], membership, iterations);
+      centroids[i] = kmeans_cluster<T>(n, sub_dim, nclusters, &subvectors[0], membership);
       // update the codebook
       for (size_t j = 0; j < n; j++)
         codebook[j][i] = CT(membership[j]);
-      subvectors.clear();
-      for (int j = 0; j < 10; j++)
-        printf("c[%d][%d]=%f\t", i, j, centroids[i][j]);
-      printf("\n");
+      //subvectors.clear();
+      //for (int j = 0; j < 10; j++)
+      //  printf("c[%d][%d]=%f\t", i, j, centroids[i][j]);
+      //printf("\n");
     }
   }
 
@@ -102,9 +102,9 @@ public:
         codebook[i][j] = CT(bestIndex);
       }
       if (i > 10) continue;
-      for (int j = 0; j < m; j++)
-        printf("codebook[%ld][%d]=%d\t", i, j, codebook[i][j]);
-      printf("\n");
+      //for (int j = 0; j < m; j++)
+      //  printf("codebook[%ld][%d]=%d\t", i, j, codebook[i][j]);
+      //printf("\n");
     }
   }
 
