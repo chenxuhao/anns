@@ -1,10 +1,4 @@
-#include "timer.hpp"
-#include "graph.hpp"
-#include "data_loader.hpp"
-
-void kNN_search(int k, int qsize, int dim, size_t npoints,
-                const float *queries, const float *data_vectors,
-                result_t &results, char *index);
+#include "utils.hpp"
 
 int main(int argc, char *argv[]) {
   if (argc < 7) {
@@ -12,25 +6,19 @@ int main(int argc, char *argv[]) {
             "<size_in_millions> <dimension> <num_queries> <output_file> \n", argv[0]);
     exit(1);
   }
-  data_loader dl(argc, argv);
-  auto k = dl.get_k();
-  auto qsize = dl.get_qsize();
-  auto dsize = dl.get_dsize();
-  auto vecdim = dl.get_vecdim();
-  auto data_vectors = dl.get_data_vectors();
-  auto queries = dl.get_queries();
-  auto gt = dl.get_ground_truth();
-  result_t results(qsize*k);
-  Timer t;
-  t.Start();
-  kNN_search(k, qsize, vecdim, dsize, queries, data_vectors, results, argv[8]);
-  t.Stop();
-  auto runtime = t.Seconds();
-  //auto throughput = double(qsize) / runtime;
-  //auto latency = runtime / qsize * 1000.0;
-  auto recall = compute_avg_recall_1D<vid_t>(k, qsize, results.data(), gt);
-  printf("total runtime: %f sec, recall: %f\n", runtime, recall);
-  //printf("avg latency: %f ms/query, throughput: %f queries/sec\n", runtime, recall, latency, throughput);
-  return 0;
+  double subset_size_millions = strtof(argv[4], nullptr); // number of vectors in millions
+  int vecdim = strtoull(argv[5], nullptr, 0); // dimention of vector
+  int qsize = strtoull(argv[6], nullptr, 0); // number of queries
+  int k = 100;//strtoull(argv[7], nullptr, 0); // k in k-NN
+  size_t dsize = (size_t)(subset_size_millions * 1000000 + 0.5);
+
+  printf("Vector Search: dsize=%ld, qsize=%d, dim=%d, k=%d\n", dsize, qsize, vecdim, k);
+
+  const char *path_d = argv[1]; // data vectors file path
+  const char *path_q = argv[2]; // query file path
+  const char *path_gt = argv[3]; // ground truth file path
+  const char *path_out = argv[7]; // output file path
+  const char *path_idx = argv[8]; // index file path
+  ANNS<float> anns(k, qsize, vecdim, dsize, path_q, path_d, path_gt, path_out, path_idx);
 }
 

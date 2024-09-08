@@ -1,14 +1,11 @@
-#include <queue>
 #include "utils.hpp"
-#include "common.hpp"
+#include "distance.hpp"
 #include "quantizer.hpp"
 
-typedef std::pair<float, vid_t> ele_t;
-typedef std::priority_queue<ele_t> pq_t;
-
-void kNN_search(int k, int qsize, int vecdim, size_t vecsize,
-                const float *queries, const float *data_vectors,
-                result_t &results, char *index) {
+template <typename T>
+void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
+                     const T* queries, const T* data_vectors,
+                     int *results, const char *index_file) {
   int num_threads;
   #pragma omp parallel
   {
@@ -18,16 +15,15 @@ void kNN_search(int k, int qsize, int vecdim, size_t vecsize,
 
   int m = 8;
   int nclusters = 256;
-  Quantizer<float> quantizer(m, nclusters, vecdim, vecsize, data_vectors);
+  Quantizer<T> quantizer(m, nclusters, dim, npoints, data_vectors);
 
   printf("Start search\n");
   #pragma omp parallel for
   for (int qid = 0; qid < qsize; ++qid) {
-    auto query = queries + vecdim * qid;
+    auto query = queries + dim * qid;
     quantizer.build_lookup_table(query);
     vector<pair<double, int>> distances;
-
-    for (size_t i = 0; i < vecsize; ++i) {
+    for (size_t i = 0; i < npoints; ++i) {
       auto dist = quantizer.quantized_distance(i);
       distances.emplace_back(dist, i);
     }
@@ -38,3 +34,4 @@ void kNN_search(int k, int qsize, int vecdim, size_t vecsize,
   }
 }
 
+template class ANNS<float>;

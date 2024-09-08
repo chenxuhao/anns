@@ -34,8 +34,10 @@ MKL_LIBS := -L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_c
 OPENBLAS_LIBS := -L$(OPENBLAS_HOME)/lib -lopenblas
 RAFT_LIBS := -L$(CONDA_HOME)/lib -lraft
 RAFT_INCS := -I$(CONDA_HOME)/include -I$(RAFT_HOME)/include
-INCLUDES := -I./ -I$(ANN_HOME)/include #-I$(ANN_HOME)/include/efanna2e $(RAFT_INCS)
-INCLUDES += -I../ParlayANN/parlaylib/include/
+PARLAY_INCS := ../ParlayANN/parlaylib
+INCLUDES := -I./ -I$(ANN_HOME)/include 
+#INCLUDES += -I$(ANN_HOME)/include/efanna2e $(RAFT_INCS)
+INCLUDES += -I$(PARLAY_INCS)/include
 
 ifeq ($(DEBUG), 1)
 	CXXFLAGS += -g -O0

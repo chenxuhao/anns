@@ -17,220 +17,133 @@
 
 #include "timer.hpp"
 
-namespace utils {
+struct QueryParams{
+  long k;
+  long beamSize; 
+  double cut;
+  long limit;
+  long degree_limit;
+  QueryParams(long k, long Q, double cut, long limit, long dg) : k(k), beamSize(Q), cut(cut), limit(limit), degree_limit(dg) {}
+  QueryParams() {}
+};
 
 template <typename T>
 T* kmean_cluster(size_t npoints, int dim, int nclusters, size_t threshold,
                  const T* features, std::vector<int> &membership, int iterations = 500);
  
-template<typename T>
-std::string type_name() {
-  int status;
-  std::string tname = typeid(T).name();
-  char *demangled_name = abi::__cxa_demangle(tname.c_str(), NULL, NULL, &status);
-  if(status == 0) {
-    tname = demangled_name;
-    std::free(demangled_name);
-  }   
-  return tname;
-}
-
 template <typename T>
-void print_vector(size_t vid, int dim, const T *data, std::string name = "vec") {
-  const int n = 8;
-  //printf("DEBUG: vector dim: %d\n", dim);
-  //std::cout << "DEBUG: vector type: " << type_name<T>() << "\n";
-  assert(dim > 2*n);
-  std::cout << name << "[" << vid << "] = [ ";
-  for (int j = 0; j < n; j ++) {
-    std::cout << data[vid*dim+j] << " ";
-  }
-  std::cout << "... ";
-  for (int j = dim-n; j < dim; j ++) {
-    std::cout << data[vid*dim+j] << " ";
-  }
-  std::cout << " ]\n";
-}
+class vector_dataset {
+  public:
+    size_t num;
+    int dim;
+    T *dptr;
+    bool INNER_PRODUCT = false;
 
-template <typename T>
-void load_vectors(size_t &num, int &dim, const char *filename, T *data) {
-  std::ifstream in(filename, std::ios::binary);
-  if (!in.is_open()) {
-    fprintf(stderr, "Error: cannot open file %s\n", filename);
-    exit(EXIT_FAILURE);
-  }
-  in.read((char*)&dim, 4);
-  in.seekg(0, std::ios::end);
-  std::ios::pos_type ss = in.tellg();
-  size_t fsize = (size_t)ss;
-  num = size_t(fsize / (dim + 1) / 4);
-  //printf("DEBUG: num = %ld, dim = %d\n", num, dim);
-  //data = new T[uint64_t(num) * uint64_t(dim)];
-  in.seekg(0, std::ios::beg);
-  for (size_t i = 0; i < num; i++) {
-    in.seekg(4, std::ios::cur);
-    in.read((char*)(data + i * dim), dim * 4);
-  }
-  in.close();
-}
+    vector_dataset() { num = dim = 0; }
+    vector_dataset(const char *filename, size_t m = 0) {
+      num = m; dim = 0;
+      load_vectors(filename);
+    }
+    vector_dataset(size_t nq, int k) {
+      num = nq;
+      dim = k;
+      dptr = new T[nq*k];
+    }
 
-template <typename T = float>
-T compute_distance(int dim, const T* __restrict__ a, const T* __restrict__ b) {
-  T ans = 0.;
-  #pragma omp simd
-  for(int i = 0;i < dim; ++ i)
-    ans += (a[i] - b[i]) * (a[i] - b[i]);
-  return std::sqrt(ans);
-}
+    T *operator[](size_t i) { return &dptr[i*dim]; }
+    T* data() { return dptr; }
 
-template <typename T = float>
-T compute_distance_squared(int dim, const T* __restrict__ a, const T* __restrict__ b) {
-  T ans = 0.;
-  #pragma omp simd
-  for(int i = 0;i < dim; ++ i)
-    ans += (a[i] - b[i]) * (a[i] - b[i]);
-  return ans;
-}
+    // fbin, ibin, u8bin
+    void load_vectors(const char *filename) {
+      //std::cout << filename << " ";
+      std::ifstream in(filename, std::ios::binary);
+      if (!in.is_open()) {
+        fprintf(stderr, "Error: cannot open file %s\n", filename);
+        exit(EXIT_FAILURE);
+      }
 
-template <typename T = float>
-T compute_distance_squared_early_stop(int dim, const T* __restrict__ a, const T* __restrict__ b, T const cutoff) {
-  T ans = 0.;
-  for(int i = 0;i < dim; ++ i)
-    if((ans += (a[i] - b[i]) * (a[i] - b[i])) > cutoff)
-      return cutoff;
-  return ans;
-}
+      in.read((char*)&dim, 4);
+      in.seekg(0, std::ios::end);
+      std::ios::pos_type ss = in.tellg();
+      size_t fsize = (size_t)ss;
+      num = size_t(fsize / (dim + 1) / 4);
 
-// SIMD version
-template <typename T = float>
-T compute_distance_avx2(int dim, const T* __restrict__ a, const T* __restrict__ b) {
-  T result = 0;
-#define AVX_L2SQR(addr1, addr2, dest, tmp1, tmp2) \
-      tmp1 = _mm256_loadu_ps(addr1);\
-      tmp2 = _mm256_loadu_ps(addr2);\
-      tmp1 = _mm256_sub_ps(tmp1, tmp2); \
-      tmp1 = _mm256_mul_ps(tmp1, tmp1); \
-      dest = _mm256_add_ps(dest, tmp1);
+      //size_t nvecs = 0;
+      //in.read((char*)&nvecs, 4);
+      //if (num == 0) num = nvecs;
 
-  __m256 sum;
-  __m256 l0, l1;
-  __m256 r0, r1;
-  unsigned D = (dim + 7) & ~7U;
-  unsigned DR = D % 16;
-  unsigned DD = D - DR;
-  const T* l = a;
-  const T* r = b;
-  const T* e_l = l + DD;
-  const T* e_r = r + DD;
-  T unpack[8] __attribute__ ((aligned (32))) = {0, 0, 0, 0, 0, 0, 0, 0};
+      //std::cout << " n = " << num << " dim = " << dim << " \t";
 
-  sum = _mm256_load_ps(unpack);
-  if(DR) { AVX_L2SQR(e_l, e_r, sum, l0, r0); }
+      if ((dim*sizeof(T)) % 32 == 0) {
+      //if (0) {
+        //std::cout << " aligned\n";
+        dptr = (T*)aligned_alloc(32, num*dim*sizeof(T));
+      } else {
+        //std::cout << " unaligned\n";
+        dptr = (T*)malloc(num*dim*sizeof(T));
+      }
 
-  for (unsigned i = 0; i < DD; i += 16, l += 16, r += 16) {
-    AVX_L2SQR(l, r, sum, l0, r0);
-    AVX_L2SQR(l + 8, r + 8, sum, l1, r1);
-  }
-  _mm256_store_ps(unpack, sum);
-  result = unpack[0] + unpack[1] + unpack[2] + unpack[3] + unpack[4] + unpack[5] + unpack[6] + unpack[7];
-
-  return result;
-}
-
-class StopW {
-	std::chrono::steady_clock::time_point time_begin;
-public:
-	StopW() {
-		time_begin = std::chrono::steady_clock::now();
-	}
-	double getElapsedTimeMicro() {
-		std::chrono::steady_clock::time_point time_end = std::chrono::steady_clock::now();
-		return (std::chrono::duration_cast<std::chrono::microseconds>(time_end - time_begin).count());
-	}
-	void reset() {
-		time_begin = std::chrono::steady_clock::now();
-	}
+      in.seekg(0, std::ios::beg);
+      for (size_t i = 0; i < num; i++) {
+        in.seekg(4, std::ios::cur);
+        in.read((char*)(dptr + i * dim), dim * 4);
+      }
+      //for (size_t i = 0; i < num; i++) in.read((char*)(dptr+i*dim), sizeof(T)*dim);
+      in.close();
+    }
 };
 
-/**
-* Returns the peak (maximum so far) resident set size (physical
-* memory use) measured in bytes, or zero if the value cannot be
-* determined on this OS.
-*/
-static inline size_t getPeakRSS() {
-#if defined(_WIN32)
-    /* Windows -------------------------------------------------- */
-    PROCESS_MEMORY_COUNTERS info;
-    GetProcessMemoryInfo(GetCurrentProcess(), &info, sizeof(info));
-    return (size_t)info.PeakWorkingSetSize;
+template <typename T>
+class ANNS {
+private:
+  int K;
+  int nqueries;
+  int vecdim;
+  size_t npoints;
+public:
+  ANNS(int k, int qsize, int dim, size_t dsize,
+       const char* query_file, const char* data_file, 
+       const char* gt_file, const char* out_file, const char *index) :
+      K(k), nqueries(qsize), vecdim(dim), npoints(dsize) {
+    int degree = 32;
+    QueryParams QP(K, 5*K, 0, npoints, degree);
+    vector_dataset<T> data_vectors(data_file);
+    vector_dataset<T> queries(query_file);
+    vector_dataset<int> gt_all(gt_file);
+    vector_dataset<int> results(nqueries, k);
+    Timer t;
+    t.Start();
+    search(K, nqueries, vecdim, npoints, queries.data(), data_vectors.data(), results.data(), index);
+    t.Stop();
+    auto runtime = t.Seconds();
+    auto recall = compute_avg_recall_1D(results, gt_all);
+    printf("total runtime: %f sec, recall: %f\n", runtime, recall);
+  }
 
-#elif (defined(_AIX) || defined(__TOS__AIX__)) || (defined(__sun__) || defined(__sun) || defined(sun) && (defined(__SVR4) || defined(__svr4__)))
-    /* AIX and Solaris ------------------------------------------ */
-    struct psinfo psinfo;
-    int fd = -1;
-    if ((fd = open("/proc/self/psinfo", O_RDONLY)) == -1)
-        return (size_t)0L;      /* Can't open? */
-    if (read(fd, &psinfo, sizeof(psinfo)) != sizeof(psinfo))
-    {
-        close(fd);
-        return (size_t)0L;      /* Can't read? */
+  void search(int k, int qsize, int dim, size_t npoints,
+              const T* queries, const T* data_vectors,
+              int *results, const char *index);
+
+  inline double compute_avg_recall_1D(vector_dataset<int> &results, vector_dataset<int> &gt) {
+    assert(results.num == gt.num);
+    assert(results.dim <= gt.dim);
+    size_t qsize = results.num;
+    int K = results.dim;
+    int64_t correct = 0;
+    #pragma omp parallel for reduction(+:correct)
+    for (size_t q_i = 0; q_i < qsize; ++q_i) {
+      for (int top_i = 0; top_i < K; ++top_i) {
+        auto true_id = gt[q_i][top_i];
+        for (int n_i = 0; n_i < K; ++n_i) {
+          if (results[q_i][n_i] == true_id) {
+            correct ++;
+            break;
+          }
+        }
+      }
     }
-    close(fd);
-    return (size_t)(psinfo.pr_rssize * 1024L);
+    int64_t total = K * qsize;
+    return double(correct) / double(total);
+  }
+};
 
-#elif defined(__unix__) || defined(__unix) || defined(unix) || (defined(__APPLE__) && defined(__MACH__))
-    /* BSD, Linux, and OSX -------------------------------------- */
-    struct rusage rusage;
-    getrusage(RUSAGE_SELF, &rusage);
-#if defined(__APPLE__) && defined(__MACH__)
-    return (size_t)rusage.ru_maxrss;
-#else
-    return (size_t) (rusage.ru_maxrss * 1024L);
-#endif
-
-#else
-    /* Unknown OS ----------------------------------------------- */
-    return (size_t)0L;          /* Unsupported. */
-#endif
-}
-
-/**
-* Returns the current resident set size (physical memory use) measured
-* in bytes, or zero if the value cannot be determined on this OS.
-*/
-static inline size_t getCurrentRSS() {
-#if defined(_WIN32)
-    /* Windows -------------------------------------------------- */
-    PROCESS_MEMORY_COUNTERS info;
-    GetProcessMemoryInfo(GetCurrentProcess(), &info, sizeof(info));
-    return (size_t)info.WorkingSetSize;
-
-#elif defined(__APPLE__) && defined(__MACH__)
-    /* OSX ------------------------------------------------------ */
-    struct mach_task_basic_info info;
-    mach_msg_type_number_t infoCount = MACH_TASK_BASIC_INFO_COUNT;
-    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO,
-        (task_info_t)&info, &infoCount) != KERN_SUCCESS)
-        return (size_t)0L;      /* Can't access? */
-    return (size_t)info.resident_size;
-
-#elif defined(__linux__) || defined(__linux) || defined(linux) || defined(__gnu_linux__)
-    /* Linux ---------------------------------------------------- */
-    long rss = 0L;
-    FILE *fp = NULL;
-    if ((fp = fopen("/proc/self/statm", "r")) == NULL)
-        return (size_t) 0L;      /* Can't open? */
-    if (fscanf(fp, "%*s%ld", &rss) != 1) {
-        fclose(fp);
-        return (size_t) 0L;      /* Can't read? */
-    }
-    fclose(fp);
-    return (size_t) rss * (size_t) sysconf(_SC_PAGESIZE);
-
-#else
-    /* AIX, BSD, Solaris, and Unknown OS ------------------------ */
-    return (size_t)0L;          /* Unsupported. */
-#endif
-}
-
-} // end namespace

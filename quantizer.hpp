@@ -54,7 +54,6 @@ public:
   void train_centroids(const T *data, int iterations = 200) {
     vector<T> subvectors(sub_dim*n);
     size_t threshold = n / 10000;
-    //float threshold = 0;
     // for each subvector space
     for (int i = 0; i < m; i++) {
       // i-th sub-vector
@@ -64,7 +63,7 @@ public:
         std::memcpy(&subvectors[j*sub_dim], start+j*dim, sub_dim*sizeof(T));
       std::vector<int> membership(n);
       // find the centroids in the i-th subvector space using k-means clustering
-      centroids[i] = utils::kmean_cluster<float>(n, sub_dim, nclusters, threshold, &subvectors[0], membership, iterations);
+      centroids[i] = kmean_cluster<T>(n, sub_dim, nclusters, threshold, &subvectors[0], membership, iterations);
       // update the codebook
       for (size_t j = 0; j < n; j++)
         codebook[j][i] = CT(membership[j]);
@@ -89,11 +88,11 @@ public:
         auto c_j = centroids[j];
         // find the closest centroid
         uint32_t bestIndex = 0;
-        auto minDist = utils::compute_distance_squared(sub_dim, subvector, c_j);
+        auto minDist = compute_distance_squared(sub_dim, subvector, c_j);
         for (int k = 1; k < nclusters; ++k) {
           // k-th centroid
           c_j += sub_dim;
-          auto dist = utils::compute_distance_squared(sub_dim, subvector, c_j);
+          auto dist = compute_distance_squared(sub_dim, subvector, c_j);
           // is it closer?
           if (dist < minDist) {
             minDist = dist;
@@ -122,7 +121,7 @@ public:
       for (int j = 0; j < nclusters; j++) {
         // j-th centroid in i-th sub-space
         auto c_ij = c_i + j*sub_dim;
-        lookup_table[i][j] = utils::compute_distance_squared(sub_dim, q_i, c_ij);
+        lookup_table[i][j] = compute_distance_squared(sub_dim, q_i, c_ij);
       }
     }
   }

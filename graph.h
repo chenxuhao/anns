@@ -33,7 +33,7 @@
 //#include "NSGDist.h"
 
 //#include "../bench/parse_command_line.h"
-//#include "types.h"
+#include "VertexSet.hpp"
 
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -126,12 +126,12 @@ struct Graph{
         graph = parlay::sequence<indexType>(n*(maxDeg+1),0);
     }
 
-    Graph(char* gFile){
+    Graph(const char* gFile){
       //load_parlay_graph(gFile);
       load_graph(gFile);
     }
 
-    void load_parlay_graph(char* gFile) {
+    void load_parlay_graph(const char* gFile) {
         std::ifstream reader(gFile);
         assert(reader.is_open());
 
@@ -203,8 +203,20 @@ struct Graph{
         writer.close();
     }
     void load_graph(std::string prefix) {
-      std::cout << "loading graph\n";
-      read_meta_info(prefix);
+      //std::cout << "loading graph\n";
+      // read meta information
+      std::ifstream f_meta((prefix + ".meta.txt").c_str());
+      assert(f_meta);
+      int64_t nv = 0, ne = 0;
+      int vid_size, eid_size, vlabel_size, elabel_size;
+      int feat_len, num_vertex_classes, num_edge_classes;
+      f_meta >> nv >> ne >> vid_size >> eid_size >> vlabel_size >> elabel_size
+        >> maxDeg >> feat_len >> num_vertex_classes >> num_edge_classes;
+      f_meta.close();
+      assert(nv > 0 && ne > 0);
+      n = nv;
+      std::cout << "Graph index: nv = " << n << " max_degree = " << maxDeg << "\n";
+
       auto d = maxDeg;
       graph = parlay::sequence<indexType>(n*d,0);
       indexType *adj_list = graph.data();
@@ -218,22 +230,22 @@ struct Graph{
       inf.read(reinterpret_cast<char*>(adj_list), sizeof(indexType) * length);
       inf.close();
     }
-    // read meta information
-    void read_meta_info(std::string prefix) {
-      std::ifstream f_meta((prefix + ".meta.txt").c_str());
-      assert(f_meta);
-      int64_t nv = 0, ne = 0;
-      int vid_size, eid_size, vlabel_size, elabel_size;
-      int feat_len, num_vertex_classes, num_edge_classes;
-      f_meta >> nv >> ne >> vid_size >> eid_size >> vlabel_size >> elabel_size
-        >> maxDeg >> feat_len >> num_vertex_classes >> num_edge_classes;
-      f_meta.close();
-      assert(nv > 0 && ne > 0);
+
+    void allocateFrom(indexType nv, int64_t ne) {
       n = nv;
-      std::cout << "nv = " << n << " max_degree = " << maxDeg << "\n";
+      graph = parlay::sequence<indexType>(ne,0);
+    }
+    void constructEdge(int64_t eid, indexType dst) {
+      indexType *edges = graph.data();
+      edges[eid] = dst;
     }
 
     edgeRange<indexType> operator [](indexType i) {auto d=maxDeg; return edgeRange<indexType>(graph.begin()+i*d, graph.begin()+(i+1)*d, i);}
+
+    VertexSet N(indexType v) {
+      indexType *adj_list = graph.data();
+      return VertexSet(adj_list+(eidType)maxDeg*v, maxDeg, v);
+    }
 
     private:
         size_t n;

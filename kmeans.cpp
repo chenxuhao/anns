@@ -1,15 +1,17 @@
 #include <float.h>
 #include "utils.hpp"
-#include "common.hpp"
-
-namespace utils {
+#include "distance.hpp"
 
 template <typename T>
 T* kmean_cluster(size_t npoints, int dim, int nclusters, size_t threshold,
                  const T* features, std::vector<int> &membership, int iterations) {
   assert(size_t(nclusters) < npoints);
   assert(membership.size() == npoints);
-  T* centroids = new T[nclusters * dim];
+  T *centroids;
+  if ((dim*sizeof(T)) % 32 == 0) {
+    centroids = (T*)aligned_alloc(32, nclusters*dim*sizeof(T));
+    std::cout << "centroids aligned\n";
+  } else centroids = new T[nclusters * dim];
   // randomly pick cluster centers
   // srand(7);
   for (int i = 0; i < nclusters; i++) {
@@ -48,7 +50,7 @@ T* kmean_cluster(size_t npoints, int dim, int nclusters, size_t threshold,
       // TODO: fix it for an arbitrary type
       T min_dist = FLT_MAX;
       for (int j = 0; j < nclusters; j++) {
-        auto dist = utils::compute_distance(dim, &features[pt*dim], &centroids[j*dim]);  /* no need square root */
+        auto dist = compute_distance_squared(dim, &features[pt*dim], &centroids[j*dim]);  /* no need square root */
         if (dist < min_dist) {
           min_dist = dist;
           index = j;
@@ -93,5 +95,3 @@ template float* kmean_cluster(size_t npoints, int dim, int nclusters, size_t thr
 //template int* kmean_cluster(size_t npoints, int dim, int nclusters, size_t threshold,
 //                            const int* features, std::vector<int> &membership, int iterations);
  
-} // end namespace
-

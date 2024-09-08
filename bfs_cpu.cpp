@@ -1,61 +1,22 @@
 #include <omp.h>
 #include <set>
-//#include "bfs.hpp"
 #include "graph.h"
 #include "utils.hpp"
 #include "pqueue.hpp"
 #include "common.hpp"
+#include "distance.hpp"
+#include "hash_filter.hpp"
 
-// expand node 'u' in graph 'g'
-// unvisited neighbors whose distances are close to the query are inserted into the queue
-// the number of distance computation performed is returned
-template <typename Td, typename Tv>
-int expand_node(Graph<vid_t> &g, Tv u, int dim, const Td* query, const Td* data_vectors,
-                std::vector<uint8_t> &is_visited, pqueue_t<Tv> &queue) {
-  auto dist_bound = queue.get_tail_dist();
-  uint64_t num_distance_computation = 0;
-  // for each neighbor w of node u
-  //for (auto w : g.N(u)) {
-  for (size_t i=0; i<g[u].size(); i++) {
-    auto w = g[u][i]; 
-    if (is_visited[w]) continue;
-    is_visited[w] = 1;
-    const Td* w_data = data_vectors + w * dim;
-    auto dist = utils::compute_distance(dim, w_data, query);
-    ++num_distance_computation;
-    if (dist < dist_bound) queue.push(w, dist);
-  }
-  return num_distance_computation;
-}
-
-// This is not a good starting strategy
-inline std::vector<vid_t> get_init_nodes(Graph<vid_t> &g, int num) {
-  std::vector<vid_t> init_ids;
-  vid_t u = rand() % g.size();
-  std::set<vid_t> id_set;
-  //std::cout << u << " [ ";
-
-  //for (auto v : g.N(u)) {
-  for (size_t i=0; i<g[u].size(); i++) {
-    auto v = g[u][i];
-    //std::cout << v << " ";
-    if (id_set.find(v) == id_set.end()) {
-      id_set.insert(v);
-      init_ids.push_back(v);
-    }
-  }
-  //std::cout << "]";
-  return init_ids;
-}
-
-void kNN_search(int K, int qsize, int dim, size_t dsize,
-                const float *queries, const float *data_vectors,
-                result_t &results, char *index_file) {
+template <typename T>
+void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
+                     const T* queries, const T* data_vectors,
+                     int *results, const char *index_file) {
   // load graph
   Graph<vid_t> g(index_file);
 
   // hyper-parameters
   const int L = K * 5; // queue 
+  int D = g.max_degree();
 
   int num_threads = 0;
   #pragma omp parallel
@@ -69,36 +30,100 @@ void kNN_search(int K, int qsize, int dim, size_t dsize,
   t.Start();
   #pragma omp parallel for schedule(dynamic,1) reduction(+:total_count_dc)
   for (int query_id = 0; query_id < qsize; query_id ++) {
-    auto init_ids = get_init_nodes(g, L);
-    std::vector<uint8_t> is_visited(dsize, 0);
+    int64_t count_dc = 0;
+    hash_filter<vid_t> is_visited(L*L);
+    auto query_data = queries + query_id * dim;
+    //auto query_data = queries[query_id];
+    new_pqueue_t<vid_t> S(L); // priority queue
 
-    const float *query_data = queries + query_id * dim;
-    pqueue_t<vid_t> S(L); // priority queue
+    auto distance_to = [&](int v) {
+      return compute_distance_squared(dim, data_vectors + v*dim, query_data);
+    };
 
-    // initialize the queue with a random node and its neighbors
-    for (size_t i = 0; i < init_ids.size(); i++) {
+    // initialize the queue with a random nodes
+    std::vector<vid_t> init_ids(K);
+    for (int i = 0; i < K; i++) init_ids[i] = rand() % npoints;
+    int bv = init_ids[0];
+    float m = distance_to(bv);
+    count_dc++;
+    // start from the node closest to the query
+    for (size_t i = 1; i < init_ids.size(); i++) {
       auto v_id = init_ids[i];
-      is_visited[v_id] = 1;
-      auto *v_data = data_vectors + v_id * dim;
-      auto dist = utils::compute_distance(dim, v_data, query_data);
-      S.push(v_id, dist);
+      auto dist = distance_to(v_id);
+      count_dc++; 
+      if (dist < m) {
+        m = dist;
+        bv = v_id;
+      }
     }
+    S.push(bv,m);
+    int iter = 0, num_hops = 0, num_push = 0;
 
+    Timer tt;
+    tt.Start();
+    // start search until no more un-expanded nodes in the queue
+    is_visited.add(bv);
+    std::vector<vid_t> keep;
+    keep.reserve(D); // a buffer for neighbor expansion
+    while (S.has_unexpanded()) {
+      ++iter;
+      int idx = S.get_next_index();
+      int u = S[idx];
+      //g.fastprefetch(u,_MM_HINT_T0);
+      S.set_front_expanded();
+      if ((S.size() > K) && (S.get_dist(idx) > S.get_dist(K)*1.35)) continue;
+      keep.clear();
+      for (auto v: g.N(u)) {
+        if (is_visited.add(v)) {
+          keep.push_back(v);
+          //PREFETCH_VECTOR(dim, data_vectors[v]);
+        }
+      }
+      //float close = 1e99;
+      //if (S.has_unexpanded()) {
+        //int idx2 = S.get_next_index();
+        //g.fastprefetch(S[idx2],_MM_HINT_T2);
+        //close = S.get_dist(idx2);
+      //}
+      for (auto v: keep) {
+        auto dist = distance_to(v);
+        count_dc++;
+        if ((S.size() > K) && (dist > S.get_dist(K)*1.35)) continue;
+        if ((S.size() < L) || (dist < S.get_tail_dist())) {
+          S.push(v,dist);
+          num_push++;
+          //if (dist < close) {
+            //g.fastprefetch(v,_MM_HINT_T2);
+            //close = dist;
+          //}
+        }
+      }
+      ++num_hops;
+    }
+/*
     // start search until no more un-expanded nodes in the queue
     int idx = 0; // Index of first un-expanded candidate in the queue
-    int iter = 0, num_hops = 0;
-    uint64_t count_dc = 0;
     while (idx < L) {
       ++iter;
       if (!S.is_expanded(idx)) {
-        S.set_expanded(idx);
-        count_dc += expand_node(g, S[idx], dim, query_data, data_vectors, is_visited, S);
+        S.set_front_expanded(idx);
+        auto dist_bound = S.get_tail_dist();
+        auto u = S[idx];
+        for (size_t i=0; i<g[u].size(); i++) {
+          auto w = g[u][i]; 
+          if (is_visited[w]) continue;
+          is_visited[w] = 1;
+          auto dist = distance_to(w);
+          if (dist < dist_bound) S.push(w, dist);
+          ++count_dc;
+        }
         ++ num_hops;
         auto r = S.get_next_index();
         if (r < idx) idx = r;
       } else ++idx;
     }
-
+*/
+    tt.Stop();
     // write the top-K nodes into results
     for (int i = 0; i < K; ++ i) {
       results[query_id * K + i] = S[i];
@@ -116,3 +141,5 @@ void kNN_search(int K, int qsize, int dim, size_t dsize,
   std::cout << "average # distance computation: " << total_count_dc / qsize << "\n";
 }
 
+// Explicit template instantiation
+template class ANNS<float>;
