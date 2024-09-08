@@ -1,5 +1,5 @@
 #pragma once
-#include "VertexSet.h"
+#include "VertexSet.hpp"
 
 typedef uint8_t vlabel_t;  // vertex label type
 typedef float   feat_t;    // vertex feature type

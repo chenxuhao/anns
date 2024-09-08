@@ -34,14 +34,15 @@ MKL_LIBS := -L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_c
 OPENBLAS_LIBS := -L$(OPENBLAS_HOME)/lib -lopenblas
 RAFT_LIBS := -L$(CONDA_HOME)/lib -lraft
 RAFT_INCS := -I$(CONDA_HOME)/include -I$(RAFT_HOME)/include
-INCLUDES := -I./ -I$(ANN_HOME)/include -I$(ANN_HOME)/include/efanna2e $(RAFT_INCS)
+INCLUDES := -I./ -I$(ANN_HOME)/include #-I$(ANN_HOME)/include/efanna2e $(RAFT_INCS)
+INCLUDES += -I../ParlayANN/parlaylib/include/
 
 ifeq ($(DEBUG), 1)
 	CXXFLAGS += -g -O0
 	NVFLAGS += -G
 else
-	CXXFLAGS += -O3
-	NVFLAGS += -O3 -w
+	CXXFLAGS += -O3 
+	NVFLAGS += -O3 -w 
 endif
 
 # Vectorization options (from 6.106)
@@ -57,7 +58,7 @@ endif
 
 #INCLUDES += -I$(OPENBLAS_HOME)/include
 
-INCLUDES += -I$(FAISS_HOME)
+#INCLUDES += -I$(FAISS_HOME)
 FAISS_LIBS = -L$(FAISS_HOME)/lib -lfaiss $(OPENBLAS_LIBS) -lgomp
 
 %.o: %.cc

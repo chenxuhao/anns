@@ -1,7 +1,7 @@
 include common.mk
 
 OBJS=data_loader.o
-GOBJS=graph.o VertexSet.o
+GOBJS=#graph.o VertexSet.o
 INCS=pqueue.hpp
 BIN=./bin/
 
@@ -26,6 +26,10 @@ ivf_flat_gpu: $(INCS) $(OBJS) ivf_flat_gpu.o kmeans_gpu.o tester.o
 
 graph_search_cpu: $(INCS) $(OBJS) bfs_cpu.o tester.o $(GOBJS)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) bfs_cpu.o tester.o $(GOBJS) -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+graph_search_gpu: $(INCS) $(OBJS) bfs_gpu.o tester.o $(GOBJS)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) bfs_gpu.o tester.o $(GOBJS) -o $@ $(LIBS) $(NVLIBS)
 	mv $@ $(BIN)
 
 build_graph_cpu: $(INCS) $(OBJS) $(GOBJS) build_knn_graph.o build_graph.o

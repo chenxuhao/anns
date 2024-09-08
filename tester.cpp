@@ -26,10 +26,11 @@ int main(int argc, char *argv[]) {
   kNN_search(k, qsize, vecdim, dsize, queries, data_vectors, results, argv[8]);
   t.Stop();
   auto runtime = t.Seconds();
-  auto throughput = double(qsize) / runtime;
-  auto latency = runtime / qsize * 1000.0;
+  //auto throughput = double(qsize) / runtime;
+  //auto latency = runtime / qsize * 1000.0;
   auto recall = compute_avg_recall_1D<vid_t>(k, qsize, results.data(), gt);
-  printf("runtime: %f sec, recall: %f, avg latency: %f ms/query, throughput: %f queries/sec\n", runtime, recall, latency, throughput);
+  printf("total runtime: %f sec, recall: %f\n", runtime, recall);
+  //printf("avg latency: %f ms/query, throughput: %f queries/sec\n", runtime, recall, latency, throughput);
   return 0;
 }
 
