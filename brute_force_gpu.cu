@@ -5,6 +5,8 @@
 #include "cuda_profiler_api.h"
 #include "cuda_launch_config.cuh"
 
+#define M 2
+
 __global__ void //__launch_bounds__(BLOCK_SIZE, 8)
 BruteForceSearch(int K, int qsize, int dim, size_t npoints,
                  const float *queries, 
@@ -18,20 +20,23 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
 
   __shared__ uint64_t count_dc[WARPS_PER_BLOCK];
-  __shared__ vid_t candidates[BLOCK_SIZE];
-  __shared__ float distances[BLOCK_SIZE];
+  __shared__ vid_t candidates[BLOCK_SIZE*M];
+  __shared__ float distances[BLOCK_SIZE*M];
   if (thread_lane == 0) count_dc[warp_lane] = 0;
  
   // for sorting
-  typedef cub::BlockRadixSort<float, BLOCK_SIZE, 1, vid_t> BlockRadixSort;
+  typedef cub::BlockRadixSort<float, BLOCK_SIZE, M, vid_t> BlockRadixSort;
   __shared__ typename BlockRadixSort::TempStorage temp_storage;
 
+  int ROUNDS = (BLOCK_SIZE*M - K) / WARPS_PER_BLOCK;
+  int NTASKS = ROUNDS * WARPS_PER_BLOCK;
   // each thread block takes a query
   for (int qid = blockIdx.x; qid < qsize; qid += gridDim.x) {
     const float *q_data = queries + qid * dim;
-
-    distances[threadIdx.x] = FLT_MAX;
-    candidates[threadIdx.x] = threadIdx.x;
+    for (int i = 0; i < M; i++) {
+      distances[BLOCK_SIZE*i+threadIdx.x] = FLT_MAX;
+      candidates[BLOCK_SIZE*i+threadIdx.x] = BLOCK_SIZE*i+threadIdx.x;
+    }
     __syncthreads();
     // insert the first K points
     for (size_t pid = warp_lane; pid < K; pid += WARPS_PER_BLOCK) {
@@ -44,31 +49,41 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
     }
     __syncthreads();
     // sort the queue by distance
-    float thread_key[1];
-    vid_t thread_val[1];
+    float thread_key[M];
+    vid_t thread_val[M];
+/*
     thread_key[0] = distances[threadIdx.x];
     thread_val[0] = candidates[threadIdx.x];
     BlockRadixSort(temp_storage).Sort(thread_key, thread_val);
     distances[threadIdx.x] = thread_key[0];
     candidates[threadIdx.x] = thread_val[0];
     __syncthreads();
-
+*/
     // each warp compares one point in the database
-    for (size_t pid = K+warp_lane; pid < npoints; pid += WARPS_PER_BLOCK) {
-      auto *p_data = data_vectors + pid * dim;
-      auto dist = cutils::compute_distance(dim, p_data, q_data);
-      if (thread_lane == 0) {
-        count_dc[warp_lane] += 1;
-        distances[warp_lane+K] = dist;
-        candidates[warp_lane+K] = pid;
+    for (size_t i = K+warp_lane; i < npoints; i += NTASKS) {
+      for (int j = 0; j < ROUNDS; j++) {
+        // in each rounds, every warp processes one data point
+        auto pid = i + j * WARPS_PER_BLOCK;
+        auto *p_data = data_vectors + pid * dim;
+        auto dist = cutils::compute_distance(dim, p_data, q_data);
+        if (thread_lane == 0) {
+          count_dc[warp_lane] += 1;
+          distances[warp_lane+K+j*WARPS_PER_BLOCK] = dist;
+          candidates[warp_lane+K+j*WARPS_PER_BLOCK] = pid;
+        }
       }
       __syncthreads();
+
       // sort the queue by distance
-      thread_key[0] = distances[threadIdx.x];
-      thread_val[0] = candidates[threadIdx.x];
+      for (int j = 0; j < M; j++) {
+        thread_key[j] = distances[j+M*threadIdx.x];
+        thread_val[j] = candidates[j+M*threadIdx.x];
+      }
       BlockRadixSort(temp_storage).Sort(thread_key, thread_val);
-      distances[threadIdx.x] = thread_key[0];
-      candidates[threadIdx.x] = thread_val[0];
+      for (int j = 0; j < M; j++) {
+        distances[j+M*threadIdx.x] = thread_key[j];
+        candidates[j+M*threadIdx.x] = thread_val[j];
+      }
       __syncthreads();
     }
     // write the top-k elements into results
@@ -82,7 +97,7 @@ template <typename T>
 void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
                      const T* queries, const T* data_vectors,
                      int *results, const char *index_file) {
-  assert(K+WARPS_PER_BLOCK <= BLOCK_SIZE);
+  assert(K+WARPS_PER_BLOCK <= M*BLOCK_SIZE);
   size_t memsize = cutils::print_device_info(0);
 
   // GPU lauch configuration
