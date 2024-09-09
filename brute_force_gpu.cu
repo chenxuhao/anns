@@ -16,18 +16,18 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
   //int num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;  // total number of active warps
   int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
-  int bid = blockIdx.x; // worker id is the same as thread block id
 
   __shared__ uint64_t count_dc[WARPS_PER_BLOCK];
   __shared__ vid_t candidates[BLOCK_SIZE];
   __shared__ float distances[BLOCK_SIZE];
-
+  if (thread_lane == 0) count_dc[warp_lane] = 0;
+ 
   // for sorting
   typedef cub::BlockRadixSort<float, BLOCK_SIZE, 1, vid_t> BlockRadixSort;
   __shared__ typename BlockRadixSort::TempStorage temp_storage;
 
   // each thread block takes a query
-  for (int qid = bid; qid < qsize; qid += gridDim.x) {
+  for (int qid = blockIdx.x; qid < qsize; qid += gridDim.x) {
     const float *q_data = queries + qid * dim;
 
     distances[threadIdx.x] = FLT_MAX;
@@ -49,8 +49,9 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
     thread_key[0] = distances[threadIdx.x];
     thread_val[0] = candidates[threadIdx.x];
     BlockRadixSort(temp_storage).Sort(thread_key, thread_val);
-    candidates[threadIdx.x] = thread_key[0];
-    distances[threadIdx.x] = thread_val[0];
+    distances[threadIdx.x] = thread_key[0];
+    candidates[threadIdx.x] = thread_val[0];
+    __syncthreads();
 
     // each warp compares one point in the database
     for (size_t pid = K+warp_lane; pid < npoints; pid += WARPS_PER_BLOCK) {
@@ -66,8 +67,8 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
       thread_key[0] = distances[threadIdx.x];
       thread_val[0] = candidates[threadIdx.x];
       BlockRadixSort(temp_storage).Sort(thread_key, thread_val);
-      candidates[threadIdx.x] = thread_key[0];
-      distances[threadIdx.x] = thread_val[0];
+      distances[threadIdx.x] = thread_key[0];
+      candidates[threadIdx.x] = thread_val[0];
       __syncthreads();
     }
     // write the top-k elements into results
@@ -112,7 +113,6 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   CUDA_SAFE_CALL(cudaMemcpy(d_total_count_dc, &total_count_dc, sizeof(gpu_long_t), cudaMemcpyHostToDevice));
   CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
-  printf("Start search\n");
   //cudaProfilerStart();
   Timer t;
   t.Start();
