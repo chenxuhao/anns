@@ -109,8 +109,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
         S.set_front_expanded(idx);
         auto dist_bound = S.get_tail_dist();
         auto u = S[idx];
-        for (size_t i=0; i<g[u].size(); i++) {
-          auto w = g[u][i]; 
+        for (auto w: g.N(u)) {
           if (is_visited[w]) continue;
           is_visited[w] = 1;
           auto dist = distance_to(w);

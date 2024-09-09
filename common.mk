@@ -10,18 +10,15 @@ NVCC := nvcc
 
 UNAME_P := $(shell uname -p)
 ifndef GPU_ARCH
-GPU_ARCH = 80
+GPU_ARCH = 61
 endif
 CUDA_ARCH := -gencode arch=compute_$(GPU_ARCH),code=sm_$(GPU_ARCH)
-CXXFLAGS  := -Wall -fopenmp -std=c++17
+CXXFLAGS  := -Wall -fopenmp -std=c++20
 #CXXFLAGS  += -ftree-vectorizer-verbose=6
-#ifneq ($(UNAME_P), arm)
-ifeq ($(UNAME_P), x86_64)
-  CXXFLAGS += -march=native
-endif
-ICPCFLAGS := -O3 -Wall -qopenmp -std=c++17
+CXXFLAGS += -march=native
+ICPCFLAGS := -O3 -Wall -qopenmp -std=c++20
 NVFLAGS := $(CUDA_ARCH)
-NVFLAGS += -Xptxas -v -std=c++17
+NVFLAGS += -Xptxas -v -std=c++20
 NVFLAGS += -DUSE_GPU
 NVFLAGS += --expt-relaxed-constexpr
 NVFLAGS += --extended-lambda
@@ -37,7 +34,6 @@ RAFT_INCS := -I$(CONDA_HOME)/include -I$(RAFT_HOME)/include
 PARLAY_INCS := ../ParlayANN/parlaylib
 INCLUDES := -I./include -I$(ANN_HOME)/include 
 #INCLUDES += -I$(ANN_HOME)/include/efanna2e $(RAFT_INCS)
-INCLUDES += -I$(PARLAY_INCS)/include
 
 ifeq ($(DEBUG), 1)
 	CXXFLAGS += -g -O0

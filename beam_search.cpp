@@ -1,12 +1,7 @@
-//#include "parlay/parallel.h"
-//#include "parlay/primitives.h"
-//#include "parlay/random.h"
-
 #include <set>
 #include <vector>
 #include "graph.h"
 #include "utils.hpp"
-#include "common.hpp"
 #include "distance.hpp"
 
 // main beam search
@@ -81,9 +76,10 @@ beam_search(Graph<indexType> &G, std::vector<indexType> starting_points, QueryPa
     // hash it will be removed below by the union or will not bump anyone else.
     candidates.clear();
     keep.clear();
-    long num_elts = std::min<long>(G[current.first].size(), QP.degree_limit);
-    for (indexType i=0; i<num_elts; i++) {
-      auto a = G[current.first][i];
+    //long num_elts = std::min<long>(G[current.first].size(), QP.degree_limit);
+    //for (indexType i=0; i<num_elts; i++) {
+      //auto a = G[current.first][i];
+    for (auto a : G.N(current.first)) {
       if (has_been_seen(a)) continue;  // skip if already seen
       keep.push_back(a);
       //TODO: prefetch a' vector data;

@@ -5,6 +5,11 @@ GRAPH=graph
 NQ=100
 NP=0.01
 
+DATA=sift
+GRAPH=graph
+NQ=10000
+NP=1
+
 BIN_PATH=../bin
 DATA_PATH=../data/$DATA
 BIN=parlayann_cpu

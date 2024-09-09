@@ -4,9 +4,9 @@
 #include <iostream>
 #include <fstream>
 
-#include "parlay/parallel.h"
-#include "parlay/primitives.h"
-#include "parlay/internal/file_map.h"
+//#include "parlay/parallel.h"
+//#include "parlay/primitives.h"
+//#include "parlay/internal/file_map.h"
 #include "VertexSet.hpp"
 
 #include <fcntl.h>
@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-
+/*
 template<typename indexType>
 struct edgeRange{
   size_t size(){return edges[0];}
@@ -74,7 +74,7 @@ struct edgeRange{
   long maxDeg;
   indexType id_;
 };
-
+*/
 template<typename indexType>
 struct Graph{
   long max_degree() const {return maxDeg;}
@@ -84,13 +84,15 @@ struct Graph{
 
   Graph(){}
   Graph(long maxDeg, size_t n) : maxDeg(maxDeg), n(n) {
-    graph = parlay::sequence<indexType>(n*(maxDeg+1),0);
+    //graph = parlay::sequence<indexType>(n*(maxDeg+1),0);
+    graph.resize(n*maxDeg);
+    std::fill(graph.begin(), graph.end(), 0);
   }
   Graph(const char* gFile){
     //load_parlay_graph(gFile);
     load_graph(gFile);
   }
-
+/*
   void load_parlay_graph(const char* gFile) {
     std::ifstream reader(gFile);
     assert(reader.is_open());
@@ -162,6 +164,7 @@ struct Graph{
     }
     writer.close();
   }
+*/
   void load_graph(std::string prefix) {
     //std::cout << "loading graph\n";
     // read meta information
@@ -178,7 +181,9 @@ struct Graph{
     std::cout << "Graph index: nv = " << n << " max_degree = " << maxDeg << "\n";
 
     auto d = maxDeg;
-    graph = parlay::sequence<indexType>(n*d,0);
+    graph.resize(n*d);
+    std::fill(graph.begin(), graph.end(), 0);
+    //graph = parlay::sequence<indexType>(n*d,0);
     indexType *adj_list = graph.data();
     auto length = graph.size();
     auto fname = prefix + ".edge.bin";
@@ -192,16 +197,22 @@ struct Graph{
   }
   void allocateFrom(indexType nv, int64_t ne) {
     n = nv;
-    graph = parlay::sequence<indexType>(ne,0);
+    //graph = parlay::sequence<indexType>(ne,0);
+    graph.resize(ne);
+    std::fill(graph.begin(), graph.end(), 0);
+    assert(ne % n == 0);
+    maxDeg = ne / n;
   }
   void constructEdge(int64_t eid, indexType dst) {
     indexType *edges = graph.data();
     edges[eid] = dst;
   }
+  /*
   edgeRange<indexType> operator [](indexType i) {
     auto d=maxDeg;
     return edgeRange<indexType>(graph.begin()+i*d, graph.begin()+(i+1)*d, i);
   }
+  */
   VertexSet N(indexType v) {
     indexType *adj_list = graph.data();
     return VertexSet(adj_list+(eidType)maxDeg*v, maxDeg, v);
@@ -210,6 +221,7 @@ struct Graph{
   private:
   size_t n;
   long maxDeg;
-  parlay::sequence<indexType> graph;
+  //parlay::sequence<indexType> graph;
+  std::vector<indexType> graph;
 };
 

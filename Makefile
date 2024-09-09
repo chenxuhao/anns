@@ -39,7 +39,7 @@ graph_search_gpu: $(INCS) $(OBJS) bfs_gpu.o tester.o $(GOBJS)
 	mv $@ $(BIN)
 
 parlayann_cpu: $(INCS) $(OBJS) beam_search.o tester.o $(GOBJS)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) beam_search.o tester.o $(GOBJS) -o $@ $(LIBS)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) beam_search.o tester.o $(GOBJS) -o $@ $(LIBS) -I$(PARLAY_INCS)/include
 	mv $@ $(BIN)
 
 clean:
