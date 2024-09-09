@@ -5,9 +5,6 @@
 #include "cuda_profiler_api.h"
 #include "cuda_launch_config.cuh"
 
-#define MAX_DEG 32
-#define MASTER_QUEUE_SIZE BLOCK_SIZE * 2 // queue length
-
 template <typename Td, typename Tv>
 __device__ uint64_t expand_node(GraphGPU g, Tv u, int dim, int wid,
                                 const Td* query, 
@@ -63,7 +60,7 @@ BestFirstSearch(GraphGPU g, int K, int qsize, int dim, size_t dsize,
   __shared__ uint64_t count_dc[WARPS_PER_BLOCK];
 
   // each thread block takes a query
-  for (int qid = 0; qid < qsize; qid += blockIdx.x) {
+  for (int qid = blockIdx.x; qid < qsize; qid += blockDim.x) {
     const float *query_data = queries + qid * dim;
 
     // initialize the queue with random nodes

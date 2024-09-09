@@ -16,9 +16,7 @@
 #include <iterator>
 #include <algorithm>
 
-typedef uint32_t vidType;  // vertex ID type
-typedef int64_t eidType;   // edge ID type
-typedef std::vector<vidType> VertexList; // vertex ID list
+#include "common.hpp"
 
 constexpr vidType VID_MIN = 0;
 constexpr vidType VID_MAX = std::numeric_limits<vidType>::max();

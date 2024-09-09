@@ -1,14 +1,30 @@
 #!/bin/bash
 
 DATASET=siftsmall
-DSIZE=0.01
-QSIZE=100
+NP=0.01
+NQ=100
 #DATASET=sift
-#DSIZE=1
-#QSIZE=10000
+#NP=1
+#NQ=10000
 
 DIM=128
 BIN=brute_force_cpu
+#BIN=brute_force_gpu
 
-echo "../bin/$BIN ./../data/$DATASET/$DATASET\_base.fvecs ./../data/$DATASET/$DATASET\_query.fvecs ./../data/$DATASET/$DATASET\_groundtruth.ivecs $DSIZE $DIM $QSIZE output.ivecs"
-../bin/$BIN ./../data/$DATASET/$DATASET\_base.fvecs ./../data/$DATASET/$DATASET\_query.fvecs ./../data/$DATASET/$DATASET\_groundtruth.ivecs $DSIZE $DIM $QSIZE output.ivecs
+BIN_PATH=../bin
+DATA_PATH=../data
+OUTFILE=output.txt
+
+DATASET=siftsmall
+
+echo "$BIN_PATH/$BIN $DATA_PATH/$DATASET/$DATASET\_base.fvecs \
+      $DATA_PATH/$DATASET/$DATASET\_query.fvecs \
+      $DATA_PATH/$DATASET/$DATASET\_groundtruth.ivecs \
+      $NP $DIM $NQ $OUTFILE"
+
+$BIN_PATH/$BIN $DATA_PATH/$DATASET/$DATASET\_base.fvecs \
+               $DATA_PATH/$DATASET/$DATASET\_query.fvecs \
+               $DATA_PATH/$DATASET/$DATASET\_groundtruth.ivecs \
+               $NP $DIM $NQ $OUTFILE
+
+

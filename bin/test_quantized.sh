@@ -1,15 +1,23 @@
 #!/bin/bash
 
+BIN=quantized_search_cpu
 BIN_PATH=../bin
-DATA_PATH=../data/siftsmall
+DATA_PATH=../data
+OUTFILE=output.txt
 
-echo "$BIN_PATH/quantized_search_cpu $DATA_PATH/siftsmall_base.fvecs \
-  $DATA_PATH/siftsmall_query.fvecs \
-  $DATA_PATH/siftsmall_groundtruth.ivecs \
-  0.01 128 100 output.txt"
+DATASET=siftsmall
+NP=0.01
+DIM=128
+NQ=100
 
-$BIN_PATH/quantized_search_cpu $DATA_PATH/siftsmall_base.fvecs \
-  $DATA_PATH/siftsmall_query.fvecs \
-  $DATA_PATH/siftsmall_groundtruth.ivecs \
-  0.01 128 100 output.txt
+echo "$BIN_PATH/$BIN $DATA_PATH/$DATASET/$DATASET\_base.fvecs \
+      $DATA_PATH/$DATASET/$DATASET\_query.fvecs \
+      $DATA_PATH/$DATASET/$DATASET\_groundtruth.ivecs \
+      $NP $DIM $NQ $OUTFILE"
+
+$BIN_PATH/$BIN $DATA_PATH/$DATASET/$DATASET\_base.fvecs \
+               $DATA_PATH/$DATASET/$DATASET\_query.fvecs \
+               $DATA_PATH/$DATASET/$DATASET\_groundtruth.ivecs \
+               $NP $DIM $NQ $OUTFILE
+
 

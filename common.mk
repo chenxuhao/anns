@@ -35,7 +35,7 @@ OPENBLAS_LIBS := -L$(OPENBLAS_HOME)/lib -lopenblas
 RAFT_LIBS := -L$(CONDA_HOME)/lib -lraft
 RAFT_INCS := -I$(CONDA_HOME)/include -I$(RAFT_HOME)/include
 PARLAY_INCS := ../ParlayANN/parlaylib
-INCLUDES := -I./ -I$(ANN_HOME)/include 
+INCLUDES := -I./include -I$(ANN_HOME)/include 
 #INCLUDES += -I$(ANN_HOME)/include/efanna2e $(RAFT_INCS)
 INCLUDES += -I$(PARLAY_INCS)/include
 
@@ -63,16 +63,9 @@ endif
 #INCLUDES += -I$(FAISS_HOME)
 FAISS_LIBS = -L$(FAISS_HOME)/lib -lfaiss $(OPENBLAS_LIBS) -lgomp
 
-%.o: %.cc
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
-
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $<
 
 %.o: %.cu
 	$(NVCC) $(NVFLAGS) $(INCLUDES) -c $<
-
-%.o: %.cxx
-	$(CLANGXX) $(CILKFLAGS) $(INCLUDES) $(CILK_INC) -c $<
-
 

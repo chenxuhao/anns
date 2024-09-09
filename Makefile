@@ -1,15 +1,21 @@
 include common.mk
 
 OBJS=
-GOBJS=VertexSet.o
-INCS=pqueue.hpp
+GOBJS=#VertexSet.o
+INCS=include/pqueue.hpp
+CUINCS=include/pqueue.cuh
 BIN=./bin/
 
 all: brute_force_cpu quantized_search_cpu ivf_flat_cpu
 g-ann: graph_search_cpu parlayann_cpu
+ann-gpu: brute_force_gpu
 
 brute_force_cpu: $(INCS) $(OBJS) brute_force_cpu.o tester.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) brute_force_cpu.o tester.o -o $@ $(LIBS)
+	mv $@ $(BIN)
+
+brute_force_gpu: $(CUINCS) $(OBJS) brute_force_gpu.o tester.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) brute_force_gpu.o tester.o -o $@ $(LIBS) $(NVLIBS)
 	mv $@ $(BIN)
 
 quantized_search_cpu: $(INCS) $(OBJS) quantized_search_cpu.o tester.o 
