@@ -9,7 +9,7 @@ NQ=100
 
 DIM=128
 BIN=brute_force_cpu
-BIN=brute_force_gpu
+#BIN=brute_force_gpu
 
 BIN_PATH=../bin
 DATA_PATH=../data
