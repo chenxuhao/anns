@@ -76,11 +76,12 @@ struct edgeRange{
 };
 */
 template<typename indexType>
-struct Graph{
+struct Graph {
   long max_degree() const {return maxDeg;}
   size_t size() const {return n;}
   size_t V() const { return n; }
   size_t E() const { return n*maxDeg; }
+  vid_t* get_adj() { return graph.data(); }
 
   Graph(){}
   Graph(long maxDeg, size_t n) : maxDeg(maxDeg), n(n) {

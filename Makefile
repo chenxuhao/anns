@@ -8,7 +8,7 @@ BIN=./bin/
 
 all: brute_force_cpu quantized_search_cpu ivf_flat_cpu
 g-ann: graph_search_cpu parlayann_cpu
-ann-gpu: brute_force_gpu
+ann-gpu: brute_force_gpu graph_search_gpu
 
 brute_force_cpu: $(INCS) $(OBJS) brute_force_cpu.o tester.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) brute_force_cpu.o tester.o -o $@ $(LIBS)

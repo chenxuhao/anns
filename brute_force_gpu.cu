@@ -1,6 +1,7 @@
-#include "utils.hpp"
 #include <cub/cub.cuh>
-#include "graph_gpu.cuh"
+
+#include "utils.hpp"
+#include "common.hpp"
 #include "cutil_subset.cuh"
 #include "cuda_profiler_api.h"
 #include "cuda_launch_config.cuh"
@@ -51,14 +52,6 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
     // sort the queue by distance
     float thread_key[M];
     vid_t thread_val[M];
-/*
-    thread_key[0] = distances[threadIdx.x];
-    thread_val[0] = candidates[threadIdx.x];
-    BlockRadixSort(temp_storage).Sort(thread_key, thread_val);
-    distances[threadIdx.x] = thread_key[0];
-    candidates[threadIdx.x] = thread_val[0];
-    __syncthreads();
-*/
     // each warp compares one point in the database
     for (size_t i = K+warp_lane; i < npoints; i += NTASKS) {
       for (int j = 0; j < ROUNDS; j++) {

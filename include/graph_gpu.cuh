@@ -3,7 +3,7 @@
 #include "cutil_subset.cuh"
 
 template <typename T>
-class GraphGPUT {
+class GraphGPU {
 protected:
   bool is_directed_;                // is it a directed graph?
   bool has_reverse;                 // has reverse/incoming edges maintained
@@ -17,16 +17,16 @@ protected:
   vidType *d_src_list, *d_dst_list; // for COO format
   vlabel_t *d_vlabels;              // vertex labels
 public:
-  GraphGPUT(vidType nv, eidType ne, int vl=0, int el=0, 
+  GraphGPU(vidType nv, eidType ne, int vl=0, int el=0, 
            int n=0, int m=1, bool use_nvshmem=false) :
-      GraphGPUT(n, m, nv, ne, vl, el) {
+      GraphGPU(n, m, nv, ne, vl, el) {
     if (nv>0 && ne>0 && !use_nvshmem) allocateFrom(nv, ne, vl, el);
   }
-  GraphGPUT(Graph<T> &g, int n=0, int m=1) : 
-      GraphGPUT(n, m, g.V(), g.E(), g.get_vertex_classes(), g.get_edge_classes()) {
+  GraphGPU(Graph<T> &g, int n=0, int m=1) : 
+      GraphGPU(n, m, g.V(), g.E()) {
     init(g);
   }
-  GraphGPUT(int n=0, int m=0, vidType nv=0, eidType ne=0, int vl=1, int el=1,
+  GraphGPU(int n=0, int m=0, vidType nv=0, eidType ne=0, int vl=1, int el=1,
            bool directed=false, bool reverse=false) : 
       is_directed_(directed),
       has_reverse(reverse),
@@ -122,30 +122,12 @@ public:
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     std::cout << "Done\n";
   }
-  void copyToDevice(vidType nv, eidType ne, eidType *h_rowptr, vidType *h_colidx, bool reverse = false,
-                    vlabel_t* h_vlabels = NULL, bool use_uva = false) {
+  void copyToDevice(Graph<T> &hg) {
     std::cout << "Copying graph data to GPU memory ... ";
-    auto rptr = d_rowptr;
-    auto cptr = d_colidx;
-    if (reverse) {
-      rptr = d_in_rowptr;
-      cptr = d_in_colidx;
-    }
-    if (use_uva) {
-      if (h_rowptr != NULL)
-        std::copy(h_rowptr, h_rowptr+nv+1, rptr);
-      if (h_colidx != NULL)
-        std::copy(h_colidx, h_colidx+ne, cptr);
-    } else {
-      if (h_rowptr != NULL)
-        CUDA_SAFE_CALL(cudaMemcpy(rptr, h_rowptr, (nv+1) * sizeof(eidType), cudaMemcpyHostToDevice));
-      if (h_colidx != NULL)
-        CUDA_SAFE_CALL(cudaMemcpy(cptr, h_colidx, ne * sizeof(vidType), cudaMemcpyHostToDevice));
-      if (h_vlabels != NULL)
-        CUDA_SAFE_CALL(cudaMemcpy(d_vlabels, h_vlabels, nv * sizeof(vlabel_t), cudaMemcpyHostToDevice));
-      CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    }
-    std::cout << "Done\n";
+    auto ne = hg.V() * hg.max_degree();
+    auto h_colidx = hg.get_adj();
+    if (h_colidx != NULL)
+      CUDA_SAFE_CALL(cudaMemcpy(d_colidx, h_colidx, ne * sizeof(vidType), cudaMemcpyHostToDevice));
   }
   void init(Graph<T> &g, int n, int m) {
     device_id = n;
@@ -153,8 +135,8 @@ public:
     init(g);
   }
   void init(Graph<T> &hg) {
-    auto nv = hg.num_vertices();
-    auto ne = hg.num_edges();
+    auto nv = hg.V();
+    auto ne = hg.E();
     size_t mem_vert = size_t(nv+1)*sizeof(eidType);
     size_t mem_edge = size_t(ne)*sizeof(vidType);
     size_t mem_graph = mem_vert + mem_edge;
@@ -162,19 +144,9 @@ public:
     size_t mem_all = mem_graph + mem_el;
     auto mem_gpu = cutils::get_gpu_mem_size();
     bool use_uva = mem_all > mem_gpu;
-    auto v_classes = hg.get_vertex_classes();
-    max_degree = hg.get_max_degree();
-    allocateFrom(nv, ne, hg.has_vlabel(), hg.has_elabel(), use_uva, hg.has_reverse_graph());
-    copyToDevice(nv, ne, hg.out_rowptr(), hg.out_colidx(), false, hg.getVlabelPtr(), hg.getElabelPtr(), use_uva);
-    if (hg.has_reverse_graph()) {
-      has_reverse = true;
-      if (hg.is_directed()) {
-        copyToDevice(nv, ne, hg.in_rowptr(), hg.in_colidx(), true);
-      } else { // undirected graph
-        d_in_rowptr = d_rowptr;
-        d_in_colidx = d_colidx;
-      }
-    }
+    max_degree = hg.max_degree();
+    allocateFrom(nv, ne);
+    copyToDevice(hg);
   }
   void toHost(Graph<T> &hg) {
     auto nv = num_vertices;
@@ -187,5 +159,3 @@ public:
   }
 };
 
-typedef GraphGPUT<int32_t> GraphGPU;
-typedef GraphGPUT<float> GraphGPUF;
