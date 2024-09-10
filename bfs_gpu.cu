@@ -12,6 +12,11 @@
 #define NUM_START 64
 #define LIMIT 1000000000
 
+// hash filter
+__device__ bool has_been_seen(vid_t v) {
+  return false;
+}
+
 template <typename T>
 __global__ void //__launch_bounds__(BLOCK_SIZE, 8)
 BeamSearch(int K, int qsize, int dim, size_t npoints,
@@ -37,6 +42,7 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
   __shared__ float nfr_dist[BEAM_SIZE+MAX_DEG];
   __shared__ float cand_dist[MAX_DEG];
   __shared__ uint64_t count_dc[WARPS_PER_BLOCK];
+  __shared__ int num_visited, remain;
  
   // for sorting
   typedef cub::BlockRadixSort<float, BLOCK_SIZE, M, vid_t> BlockRadixSort;
@@ -73,14 +79,58 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
     }
     __syncthreads();
 
-    if (threadIdx.x == 0) unvisited_frontier[0] = frontier[0];
-
-    int remain = 1;
-    int num_visited = 0;
+    if (threadIdx.x == 0) {
+      unvisited_frontier[0] = frontier[0];
+      num_visited = 0;
+      remain = 1;
+    }
+    __syncthreads();
 
     while (remain > 0 && num_visited < LIMIT) {
-    }
+      // the next node to visit is the unvisited frontier node that is closest to q
+      auto v = unvisited_frontier[0];
 
+      // add to visited set
+      //visited.insert(std::upper_bound(visited.begin(), visited.end(), v, less), v);
+      if (threadIdx.x == 0) num_visited++;
+      __syncthreads();
+
+      // keep neighbors that have not been visited (using approximate hash).
+      // Note that if a visited node is accidentally kept due to approximate
+      // hash it will be removed below by the union or will not bump anyone else.
+
+      auto v_ptr = g.N(v);
+      auto v_size = g.getOutDegree(v);
+
+      // each warp takes one neighbor
+      for (auto e = warp_lane; e < v_size; e += WARPS_PER_BLOCK) {
+        auto u = v_ptr[e];
+        if (has_been_seen(u)) continue;  // skip if already seen
+        auto *u_data = data_vectors + u * dim;
+        auto dist = cutils::compute_distance(dim, u_data, q_data);
+        if (thread_lane == 0) {
+          candidates[e] = u;
+          cand_dist[e] = dist;
+        }
+      }
+      // sort the candidates by distance from query
+
+      // union the frontier and candidates into new_frontier, both are sorted
+      // auto new_frontier_size = std::set_union(frontier, candidates, new_frontier, less);
+
+      // trim to at most beam size
+      // new_frontier_size = std::min<size_t>(QP.beamSize, new_frontier_size);
+
+      // if a k is given (i.e. k != 0) then trim off entries that have a
+      // distance greater than cut * current-kth-smallest-distance.
+
+      // copy new_frontier back to the frontier
+      // for (indexType i = 0; i < new_frontier_size; i++)
+      //   frontier[i] = new_frontier[i];
+
+      // get the unvisited frontier (we only care about the first one) and update "remain"
+      // remain = std::set_difference(frontier, visited, unvisited_frontier, less);
+    }
     for (int i = thread_lane; i < K; i += WARP_SIZE) {
       results[qid * K + i] = candidates[i];
     }
