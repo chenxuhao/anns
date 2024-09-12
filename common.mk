@@ -23,7 +23,7 @@ NVFLAGS += -DUSE_GPU
 NVFLAGS += --expt-relaxed-constexpr
 NVFLAGS += --extended-lambda
 NVFLAGS += -DRAFT_SYSTEM_LITTLE_ENDIAN=1
-NVLIBS = -L$(CUDA_HOME)/lib64 -L$(CUDA_HOME)/lib64/stubs -lcuda -lcudart -lcurand -lcublas -lcusolver
+NVLIBS = -L$(CUDA_HOME)/lib64 -L$(CUDA_HOME)/lib64/stubs -lcuda -lcudart -lcurand -lcublas -lcusolver -ldl
 MPI_LIBS = -L$(MPI_HOME)/lib -lmpi
 NVSHMEM_LIBS = -L$(NVSHMEM_HOME)/lib -lnvshmem -lnvToolsExt -lnvidia-ml -ldl -lrt
 LIBS := -lgomp
