@@ -216,9 +216,9 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
       }
 
       // get the unvisited frontier (we only care about the first one) and update "remain"
-      remain = cutils::set_difference(frontier_size, frontier, fro_dist,    // set A
-                                      num_visited, visited, visited_dist,  // set B
-                                      unvisited_frontier, ufr_dist);        // set C = A - B
+      remain = cutils::set_difference_cta(frontier_size, frontier, fro_dist,    // set A
+                                          num_visited, visited, visited_dist,  // set B
+                                          unvisited_frontier, ufr_dist);        // set C = A - B
     }
     for (int i = thread_lane; i < K; i += WARP_SIZE) {
       results[qid * K + i] = candidates[i];
