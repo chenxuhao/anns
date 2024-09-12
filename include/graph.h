@@ -81,7 +81,7 @@ struct Graph {
   size_t size() const {return n;}
   size_t V() const { return n; }
   size_t E() const { return n*maxDeg; }
-  vid_t* get_adj() { return graph.data(); }
+  vidType* get_adj() { return graph.data(); }
 
   Graph(){}
   Graph(long maxDeg, size_t n) : maxDeg(maxDeg), n(n) {

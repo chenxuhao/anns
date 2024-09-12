@@ -45,7 +45,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
       top_centers.push(cid, c_dist[cid]);
     }
     // search inside each of the top-M clusters
-    pqueue_t<vid_t> S(K);
+    pqueue_t<vidType> S(K);
     for (int i = 0; i < M; ++ i) {
       int cid = top_centers[i];
       for (auto vid : clusters[cid]) {

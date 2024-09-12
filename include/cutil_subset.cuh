@@ -156,7 +156,14 @@ __device__ __forceinline__ T compute_distance(int dim, const T* a, const T* b) {
 }
 
 template <typename T>
-__device__ __forceinline__ T* lower_bound(T* begin, T* end, T bound) {
+__device__ __forceinline__ void memmove(T* new_ptr, T* old_ptr, T num) {
+  int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
+  for (auto i = thread_lane; i < num; i += WARP_SIZE)
+    new_ptr[i] = old_ptr[i];
+}
+
+template <typename T>
+__device__ __forceinline__ T* upper_bound(T* begin, T* end, T bound) {
   int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
   __shared__ int loc[WARPS_PER_BLOCK];
@@ -176,14 +183,94 @@ __device__ __forceinline__ T* lower_bound(T* begin, T* end, T bound) {
   return begin + loc[warp_lane];
 }
 
-template <typename T>
-__device__ __forceinline__ void memmove(T* new_ptr, T* old_ptr, T num) {
-  int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
-  //int warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
- 
-  for (auto i = thread_lane; i < num; i += WARP_SIZE) {
-    new_ptr[i] = old_ptr[i];
+template <typename KeyT = float, typename ValueT = vidType>
+__device__ __forceinline__ int upper_bound(int length, KeyT* keys, ValueT* values, KeyT bound) {
+  int thread_lane = threadIdx.x & (WARP_SIZE-1);   // thread index within the warp
+  int warp_lane   = threadIdx.x / WARP_SIZE;       // warp index within the CTA
+  __shared__ int location[WARPS_PER_BLOCK];
+  if (thread_lane == 0) location[warp_lane] = 0;
+  __syncwarp();
+  int l = 0;
+  int r = length;
+  for (auto i = thread_lane + l; i < r; i += WARP_SIZE) {
+    int found = 0;
+    if (keys[i] < bound) found = 1;
+    unsigned active = __activemask();
+    unsigned mask = __ballot_sync(active, found);
+    if (thread_lane == 0) location[warp_lane] += __popc(mask);
+    __syncwarp(active);
+    if (mask != FULL_MASK) break;
   }
+  return location[warp_lane];
 }
 
+template <typename T>
+__forceinline__ __device__ bool binary_search_2phase(T *list, T *cache, T key, int size) {
+  int p = (threadIdx.x / WARP_SIZE) * WARP_SIZE;
+  int mid = 0;
+  // phase 1: search in the cache
+  int bottom = 0;
+  int top = WARP_SIZE;
+  while (top > bottom + 1) {
+    mid = (top + bottom) / 2;
+    auto y = cache[p + mid];
+    if (key == y) return true;
+    if (key < y) top = mid;
+    if (key > y) bottom = mid;
+  }
+
+  //phase 2: search in global memory
+  bottom = bottom * size / WARP_SIZE;
+  top = top * size / WARP_SIZE - 1;
+  while (top >= bottom) {
+    mid = (top + bottom) / 2;
+    auto y = list[mid];
+    if (key == y) return true;
+    if (key < y) top = mid - 1;
+    else bottom = mid + 1;
+  }
+  return false;
+}
+
+template <typename KeyT = vidType, typename ValueT = float>
+__forceinline__ __device__ int set_difference(int size_a, KeyT* key_a, ValueT* val_a, 
+                                              int size_b, KeyT* key_b, ValueT* val_b,
+                                              KeyT* key_c, ValueT* val_c) {
+  int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
+  int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
+  __shared__ int count[WARPS_PER_BLOCK];
+  __shared__ KeyT cache[BLOCK_SIZE];
+  cache[warp_lane * WARP_SIZE + thread_lane] = key_b[thread_lane * size_b / WARP_SIZE];
+  __syncwarp();
+
+  if (thread_lane == 0) count[warp_lane] = 0;
+  for (auto i = thread_lane; i < size_a; i += WARP_SIZE) {
+    unsigned active = __activemask();
+    __syncwarp(active);
+    auto key = key_a[i]; // each thread picks a vertex as the key
+    auto val = val_a[i];
+    int found = 0;
+    if (!binary_search_2phase(key_b, cache, key, size_b))
+      found = 1;
+    unsigned mask = __ballot_sync(active, found);
+    auto idx = __popc(mask << (WARP_SIZE-thread_lane-1));
+    if (found) {
+      auto position = count[warp_lane]+idx-1;
+      key_c[position] = key;
+      val_c[position] = val;
+    }
+    if (thread_lane == 0) count[warp_lane] += __popc(mask);
+  }
+  return count[warp_lane];
+}
+
+template <typename KeyT = vidType, typename ValueT = float>
+__forceinline__ __device__ int set_union(int size_a, KeyT* key_a, ValueT* val_a, 
+                                         int size_b, KeyT* key_b, ValueT* val_b,
+                                         KeyT* key_c, ValueT* val_c) {
+  int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
+  int warp_lane   = threadIdx.x / WARP_SIZE;       // warp index within the CTA
+  __shared__ int count[WARPS_PER_BLOCK];
+  return count[warp_lane];
+} 
 } // end namespace

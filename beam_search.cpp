@@ -5,7 +5,7 @@
 #include "distance.hpp"
 
 // main beam search
-template<typename indexType = vid_t, typename distanceType = float>
+template<typename indexType = vidType, typename distanceType = float>
 std::pair<std::pair<std::vector<std::pair<indexType, distanceType>>, std::vector<std::pair<indexType, distanceType>>>, size_t>
 beam_search(Graph<indexType> &G, std::vector<indexType> starting_points, QueryParams QP,
             int K, int dim, size_t dsize,
@@ -137,7 +137,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
                      const T* queries, const T* data_vectors,
                      int *results, const char *index_file) {
   // load graph
-  Graph<vid_t> g(index_file);
+  Graph<vidType> g(index_file);
 
   // hyper-parameters
   const int L = K * 5; // queue 
@@ -156,7 +156,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
 
   #pragma omp parallel for schedule(dynamic,1) reduction(+:total_count_dc)
   for (int query_id = 0; query_id < qsize; query_id ++) {
-    std::vector<vid_t> starting_points(K);
+    std::vector<vidType> starting_points(K);
     for (int i = 0; i < K; i++) starting_points[i] = rand() % npoints;
     const float *query_data = queries + query_id * dim;
     auto res = beam_search(g, starting_points, PQ, K, dim, npoints, query_data, data_vectors);

@@ -21,12 +21,12 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
 
   __shared__ uint64_t count_dc[WARPS_PER_BLOCK];
-  __shared__ vid_t candidates[BLOCK_SIZE*M];
+  __shared__ vidType candidates[BLOCK_SIZE*M];
   __shared__ float distances[BLOCK_SIZE*M];
   if (thread_lane == 0) count_dc[warp_lane] = 0;
  
   // for sorting
-  typedef cub::BlockRadixSort<float, BLOCK_SIZE, M, vid_t> BlockRadixSort;
+  typedef cub::BlockRadixSort<float, BLOCK_SIZE, M, vidType> BlockRadixSort;
   __shared__ typename BlockRadixSort::TempStorage temp_storage;
 
   int ROUNDS = (BLOCK_SIZE*M - K) / WARPS_PER_BLOCK;
@@ -51,7 +51,7 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
     __syncthreads();
     // sort the queue by distance
     float thread_key[M];
-    vid_t thread_val[M];
+    vidType thread_val[M];
     // each warp compares one point in the database
     for (size_t i = K+warp_lane; i < npoints; i += NTASKS) {
       for (int j = 0; j < ROUNDS; j++) {

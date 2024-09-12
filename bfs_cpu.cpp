@@ -12,7 +12,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
                      const T* queries, const T* data_vectors,
                      int *results, const char *index_file) {
   // load graph
-  Graph<vid_t> g(index_file);
+  Graph<vidType> g(index_file);
 
   // hyper-parameters
   const int L = K * 5; // queue 
@@ -31,17 +31,17 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   #pragma omp parallel for schedule(dynamic,1) reduction(+:total_count_dc)
   for (int query_id = 0; query_id < qsize; query_id ++) {
     int64_t count_dc = 0;
-    hash_filter<vid_t> is_visited(L*L);
+    hash_filter<vidType> is_visited(L*L);
     auto query_data = queries + query_id * dim;
     //auto query_data = queries[query_id];
-    new_pqueue_t<vid_t> S(L); // priority queue
+    new_pqueue_t<vidType> S(L); // priority queue
 
     auto distance_to = [&](int v) {
       return compute_distance_squared(dim, data_vectors + v*dim, query_data);
     };
 
     // initialize the queue with a random nodes
-    std::vector<vid_t> init_ids(K);
+    std::vector<vidType> init_ids(K);
     for (int i = 0; i < K; i++) init_ids[i] = rand() % npoints;
     int bv = init_ids[0];
     float m = distance_to(bv);
@@ -63,7 +63,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
     tt.Start();
     // start search until no more un-expanded nodes in the queue
     is_visited.add(bv);
-    std::vector<vid_t> keep;
+    std::vector<vidType> keep;
     keep.reserve(D); // a buffer for neighbor expansion
     while (S.has_unexpanded()) {
       ++iter;

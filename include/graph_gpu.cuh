@@ -2,6 +2,8 @@
 #include "graph.h"
 #include "cutil_subset.cuh"
 
+using vlabel_t = uint32_t;
+
 template <typename T>
 class GraphGPU {
 protected:
