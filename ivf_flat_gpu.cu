@@ -9,8 +9,9 @@
 float* kmeans_cluster(size_t npoints, int dim, int nclusters,
                       const float *features, std::vector<int> &membership);
  
-#define M 2
-#define MAX_NUM_CLUSTERS 2048
+#define MP 2
+#define MAX_NUM_CLUSTERS 128
+#define MC (MAX_NUM_CLUSTERS/BLOCK_SIZE)
 
 __global__ void //__launch_bounds__(BLOCK_SIZE, 8)
 IVFsearch(int K, int qsize, int dim, size_t npoints,
@@ -30,110 +31,90 @@ IVFsearch(int K, int qsize, int dim, size_t npoints,
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
 
   __shared__ uint64_t count_dc[WARPS_PER_BLOCK];
-  __shared__ vidType candidates[BLOCK_SIZE*M];
-  __shared__ float distances[BLOCK_SIZE*M];
+  __shared__ vidType candidates[BLOCK_SIZE*MP];
+  __shared__ float distances[BLOCK_SIZE*MP];
   __shared__ vidType sorted_cids[MAX_NUM_CLUSTERS];
   __shared__ float c_dists[MAX_NUM_CLUSTERS];
   if (thread_lane == 0) count_dc[warp_lane] = 0;
   const int num_top_clusters = nclusters / 10;
 
-  // for sorting
-  typedef cub::BlockRadixSort<float, BLOCK_SIZE, M, vidType> BlockRadixSort;
+  // for sorting: call cub library
+  typedef cub::BlockRadixSort<float, BLOCK_SIZE, MC, vidType> BlockRadixSortC;
+  __shared__ typename BlockRadixSortC::TempStorage temp_storageC;
+  typedef cub::BlockRadixSort<float, BLOCK_SIZE, MP, vidType> BlockRadixSort;
   __shared__ typename BlockRadixSort::TempStorage temp_storage;
 
-  int ROUNDS = (BLOCK_SIZE*M - K) / WARPS_PER_BLOCK;
-  int NTASKS = ROUNDS * WARPS_PER_BLOCK;
+  const int ROUNDS = (BLOCK_SIZE*MP - K) / WARPS_PER_BLOCK;
+  const int NTASKS = ROUNDS * WARPS_PER_BLOCK;
+
   // each thread block takes a query
   for (int qid = blockIdx.x; qid < qsize; qid += gridDim.x) {
     const float *q_data = queries + qid * dim;
 
+    // initialize centroid queue
+    for (int i = threadIdx.x; i < nclusters; i += blockDim.x) {
+      sorted_cids[i] = i;
+      c_dists[i] = FLT_MAX;
+    }
     // compute the distance between the query and centroids
+    // each warp takes one centroid
     for (size_t cid = warp_lane; cid < nclusters; cid += WARPS_PER_BLOCK) {
       auto *c_data = centroids + cid * dim;
       auto dist = cutils::compute_distance(dim, q_data, c_data);
       if (thread_lane == 0) {
         count_dc[warp_lane] += 1;
-        sorted_cids[cid] = cid;
         c_dists[cid] = dist;
       }
     }
 
-    float thread_key[M];
-    vidType thread_val[M];
-    assert(MAX_NUM_CLUSTERS <= M*BLOCK_SIZE);
-    // sort the centroids by distance, and pick the closest ones
-    for (int j = 0; j < M; j++) {
-      thread_key[j] = c_dists[j+M*threadIdx.x];
-      thread_val[j] = sorted_cids[j+M*threadIdx.x];
+    float c_key[MC];
+    vidType c_val[MC];
+    // sort the centroids by distance
+    for (int j = 0; j < MC; j++) {
+      c_key[j] = c_dists[j+MC*threadIdx.x];
+      c_val[j] = sorted_cids[j+MC*threadIdx.x];
     }
-    BlockRadixSort(temp_storage).Sort(thread_key, thread_val);
-    for (int j = 0; j < M; j++) {
-      c_dists[j+M*threadIdx.x] = thread_key[j];
-      sorted_cids[j+M*threadIdx.x] = thread_val[j];
+    BlockRadixSortC(temp_storageC).Sort(c_key, c_val);
+    for (int j = 0; j < MC; j++) {
+      c_dists[j+MC*threadIdx.x] = c_key[j];
+      sorted_cids[j+MC*threadIdx.x] = c_val[j];
     }
     __syncthreads();
 
     // start traversing the data points in the top clusters
-    for (int i = 0; i < M; i++) {
+    for (int i = 0; i < MP; i++) {
       distances[BLOCK_SIZE*i+threadIdx.x] = FLT_MAX;
-      candidates[BLOCK_SIZE*i+threadIdx.x] = BLOCK_SIZE*i+threadIdx.x;
     }
     __syncthreads();
 
-    // the first cluster
+    // the first (i.e. closest) cluster
     int cid = sorted_cids[0];
     auto cluster_0 = clusters + cid*max_cluster_size;
-    assert(cluster_sizes[0] >= K);
+    auto num = cluster_sizes[cid] >= K ? K : cluster_sizes[cid];
+
     // insert the first K points in the first cluster
-    for (size_t pid = warp_lane; pid < K; pid += WARPS_PER_BLOCK) {
-      auto *p_data = data_vectors + cluster_0[pid] * dim;
+    for (size_t id = warp_lane; id < num; id += WARPS_PER_BLOCK) {
+      auto pid = cluster_0[id];
+      auto *p_data = data_vectors + pid * dim;
       auto dist = cutils::compute_distance(dim, p_data, q_data);
       if (thread_lane == 0) {
         count_dc[warp_lane] += 1;
-        distances[pid] = dist;
+        distances[id] = dist;
+        candidates[id] = pid;
       }
     }
     __syncthreads();
 
-    // each warp compares one point in the database
-    for (size_t i = K+warp_lane; i < cluster_sizes[cid]; i += NTASKS) {
-      for (int j = 0; j < ROUNDS; j++) {
-        // in each rounds, every warp processes one data point
-        auto pid = i + j * WARPS_PER_BLOCK;
-        auto *p_data = data_vectors + cluster_0[pid] * dim;
-        auto dist = cutils::compute_distance(dim, p_data, q_data);
-        if (thread_lane == 0) {
-          count_dc[warp_lane] += 1;
-          distances[warp_lane+K+j*WARPS_PER_BLOCK] = dist;
-          candidates[warp_lane+K+j*WARPS_PER_BLOCK] = pid;
-        }
-      }
-      __syncthreads();
-
-      // sort the queue by distance
-      for (int j = 0; j < M; j++) {
-        thread_key[j] = distances[j+M*threadIdx.x];
-        thread_val[j] = candidates[j+M*threadIdx.x];
-      }
-      BlockRadixSort(temp_storage).Sort(thread_key, thread_val);
-      for (int j = 0; j < M; j++) {
-        distances[j+M*threadIdx.x] = thread_key[j];
-        candidates[j+M*threadIdx.x] = thread_val[j];
-      }
-      __syncthreads();
-    }
-
-    // for the rest of the clusters
-    for (int i = 1; i < num_top_clusters; i++) {
-      int cid = sorted_cids[i];
-      auto *cluster_i = clusters + cid*max_cluster_size;
-
+    float thread_key[MP];
+    vidType thread_val[MP];
+    // insert the rest of the points in the first cluster
+    if (cluster_sizes[cid] > K) {
       // each warp compares one point in the database
-      for (size_t ii = warp_lane; ii < cluster_sizes[cid]; ii += NTASKS) {
+      for (size_t i = K+warp_lane; i < cluster_sizes[cid]; i += NTASKS) {
         for (int j = 0; j < ROUNDS; j++) {
           // in each rounds, every warp processes one data point
-          auto pid = i + j * WARPS_PER_BLOCK;
-          auto *p_data = data_vectors + cluster_i[pid] * dim;
+          auto pid = cluster_0[i + j * WARPS_PER_BLOCK];
+          auto *p_data = data_vectors + pid * dim;
           auto dist = cutils::compute_distance(dim, p_data, q_data);
           if (thread_lane == 0) {
             count_dc[warp_lane] += 1;
@@ -144,14 +125,48 @@ IVFsearch(int K, int qsize, int dim, size_t npoints,
         __syncthreads();
 
         // sort the queue by distance
-        for (int j = 0; j < M; j++) {
-          thread_key[j] = distances[j+M*threadIdx.x];
-          thread_val[j] = candidates[j+M*threadIdx.x];
+        for (int j = 0; j < MP; j++) {
+          thread_key[j] = distances[j+MP*threadIdx.x];
+          thread_val[j] = candidates[j+MP*threadIdx.x];
         }
         BlockRadixSort(temp_storage).Sort(thread_key, thread_val);
-        for (int j = 0; j < M; j++) {
-          distances[j+M*threadIdx.x] = thread_key[j];
-          candidates[j+M*threadIdx.x] = thread_val[j];
+        for (int j = 0; j < MP; j++) {
+          distances[j+MP*threadIdx.x] = thread_key[j];
+          candidates[j+MP*threadIdx.x] = thread_val[j];
+        }
+        __syncthreads();
+      }
+    }
+
+    // for the rest of the top clusters
+    for (int ii = 1; ii < num_top_clusters; ii++) {
+      cid = sorted_cids[ii];
+      auto *cluster_i = clusters + cid*max_cluster_size;
+
+      // each warp compares one point in the database
+      for (size_t i = warp_lane; i < cluster_sizes[cid]; i += NTASKS) {
+        for (int j = 0; j < ROUNDS; j++) {
+          // in each rounds, every warp processes one data point
+          auto pid = cluster_i[i + j * WARPS_PER_BLOCK];
+          auto *p_data = data_vectors + pid * dim;
+          auto dist = cutils::compute_distance(dim, p_data, q_data);
+          if (thread_lane == 0) {
+            count_dc[warp_lane] += 1;
+            distances[warp_lane+K+j*WARPS_PER_BLOCK] = dist;
+            candidates[warp_lane+K+j*WARPS_PER_BLOCK] = pid;
+          }
+        }
+        __syncthreads();
+
+        // sort the queue by distance
+        for (int j = 0; j < MP; j++) {
+          thread_key[j] = distances[j+MP*threadIdx.x];
+          thread_val[j] = candidates[j+MP*threadIdx.x];
+        }
+        BlockRadixSort(temp_storage).Sort(thread_key, thread_val);
+        for (int j = 0; j < MP; j++) {
+          distances[j+MP*threadIdx.x] = thread_key[j];
+          candidates[j+MP*threadIdx.x] = thread_val[j];
         }
         __syncthreads();
       }
@@ -169,11 +184,12 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
                      const T* queries, const T* data_vectors,
                      int *results, const char *index_file) {
   assert(npoints >= 10000);
-  assert(K+WARPS_PER_BLOCK <= M*BLOCK_SIZE);
+  assert(K+WARPS_PER_BLOCK <= MP*BLOCK_SIZE);
   size_t memsize = cutils::print_device_info(0);
 
   // clustering the data points
   int nclusters = std::sqrt(npoints);
+  assert(MAX_NUM_CLUSTERS >= nclusters);
   std::vector<int> membership(npoints, 0);
   auto centroids = kmeans_cluster(npoints, dim, nclusters, data_vectors, membership);
   std::vector<std::vector<int>> clusters(nclusters);
@@ -190,6 +206,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
     if (cluster.size() > max_cluster_size)
       max_cluster_size = cluster.size();
   }
+  std::cout << "kmeans done: num_clusters = " << nclusters << " max_cluster_size = " << max_cluster_size << "\n";
 
   // GPU lauch configuration
   size_t num_threads = BLOCK_SIZE;
@@ -242,7 +259,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   double runtime = t.Seconds();
   auto throughput = double(qsize) / runtime;
   auto latency = runtime / qsize * 1000.0;
-  std::cout << "runtime [brute_force_gpu] = " << runtime << " sec\n";
+  std::cout << "runtime [ivf_flat_gpu] = " << runtime << " sec\n";
   std::cout << "throughput = " << throughput << " queries per second (QPS)\n";
   //printf("avg latency: %f ms/query\n", latency);
   CUDA_SAFE_CALL(cudaMemcpy(h_results, d_results, qsize * K * sizeof(int), cudaMemcpyDeviceToHost));
