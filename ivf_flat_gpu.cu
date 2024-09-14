@@ -2,13 +2,11 @@
 
 #include "utils.hpp"
 #include "common.hpp"
+#include "kmeans.hpp"
 #include "cutil_subset.cuh"
 #include "cuda_profiler_api.h"
 #include "cuda_launch_config.cuh"
 
-float* kmeans_cluster(size_t npoints, int dim, int nclusters,
-                      const float *features, std::vector<int> &membership);
- 
 #define MP 2
 #define MAX_NUM_CLUSTERS 128
 #define MC (MAX_NUM_CLUSTERS/BLOCK_SIZE)
@@ -190,17 +188,14 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   // clustering the data points
   int nclusters = std::sqrt(npoints);
   assert(MAX_NUM_CLUSTERS >= nclusters);
-  std::vector<int> membership(npoints, 0);
-  auto centroids = kmeans_cluster(npoints, dim, nclusters, data_vectors, membership);
-  std::vector<std::vector<int>> clusters(nclusters);
-  for (size_t pt = 0; pt < npoints; ++pt) {
-    auto cid = membership[pt];
-    clusters[cid].push_back(pt);
-  }
-  std::vector<float> c_dist(nclusters);
+  Kmeans<T> kmeans(npoints, dim, nclusters, data_vectors);
+  auto centroids = kmeans.cluster_gpu();
+  auto clusters = kmeans.get_clusters();
+
+  // count the maximum cluster size
+  int cidx = 0;
   int max_cluster_size = 0;
   std::vector<int> cluster_sizes(nclusters);
-  int cidx = 0;
   for (auto cluster : clusters) {
     cluster_sizes[cidx++] = cluster.size();
     if (cluster.size() > max_cluster_size)
@@ -234,7 +229,8 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   int *d_clusters, *d_cluster_sizes;
   CUDA_SAFE_CALL(cudaMalloc((void **)&d_clusters, nclusters * max_cluster_size * sizeof(int)));
   for (int i = 0; i < nclusters; i++) {
-    CUDA_SAFE_CALL(cudaMemcpy(d_clusters + i * max_cluster_size, clusters[i].data(), clusters[i].size() * sizeof(int), cudaMemcpyHostToDevice));
+    auto d_clusters_i = d_clusters + i * max_cluster_size;
+    CUDA_SAFE_CALL(cudaMemcpy(d_clusters_i, clusters[i].data(), clusters[i].size() * sizeof(int), cudaMemcpyHostToDevice));
   }
   CUDA_SAFE_CALL(cudaMalloc((void **)&d_cluster_sizes, nclusters * sizeof(int)));
   CUDA_SAFE_CALL(cudaMemcpy(d_cluster_sizes, cluster_sizes.data(), nclusters * sizeof(int), cudaMemcpyHostToDevice));

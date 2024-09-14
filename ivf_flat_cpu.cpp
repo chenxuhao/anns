@@ -16,13 +16,9 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   printf("num of threads = %d\n", num_threads);
 
   int nclusters = std::sqrt(npoints);
-  std::vector<int> membership(npoints, 0);
-  auto centroids = kmeans_cluster<float>(npoints, dim, nclusters, data_vectors, membership);
-  std::vector<std::vector<int>> clusters(nclusters);
-  for (size_t pt = 0; pt < npoints; ++pt) {
-    auto cid = membership[pt];
-    clusters[cid].push_back(pt);
-  }
+  Kmeans<T> kmeans(npoints, dim, nclusters, data_vectors);
+  auto centroids = kmeans.cluster_cpu();
+  auto clusters = kmeans.get_clusters();
   int M = nclusters / 10;
   if (M < 1) M = 1;
   std::vector<float> c_dist(nclusters);

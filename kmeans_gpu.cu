@@ -1,37 +1,18 @@
 #include <cuda.h>
 #include <float.h>
-#include "utils.hpp"
+#include "kmeans.hpp"
 #include "kmeans_kernel.cuh"
 #include "cutil_subset.cuh"
 
-__global__ void invert_mapping(float *input, float *output, int n, int dim) {
-  int point_id = threadIdx.x + blockDim.x*blockIdx.x;
-  if (point_id < n) {
-    for (int i=0; i<dim; i++)
-      output[point_id + n*i] = input[point_id*dim+i];
-  }
-}
-
-float* kmeans_cluster(size_t npoints, int dim, int nclusters, 
-                      const float *features, std::vector<int> &membership) {
-  const gpu_long_t threshold = 0;
-  assert(size_t(nclusters) < npoints);
-  assert(membership.size() == npoints);
-
-  float *centroids = new float[nclusters * dim];
-  for (int i = 0; i < nclusters; i++) {
-    #pragma omp simd
-    for (int j = 0; j < dim; j++)
-      centroids[i*dim+j] = features[i*dim+j];
-  }
-
+template <typename T>
+T* Kmeans<T>::cluster_gpu() {
   std::vector<int> new_centers_len(nclusters, 0);
   std::vector<float> new_centers(nclusters * dim, 0.);
   std::vector<float> block_new_centers(nclusters*dim, 0.f);
 
   float *feature_flipped_d;/* original (not inverted) data array */
   cudaMalloc((void**) &feature_flipped_d, npoints*dim*sizeof(float));
-  cudaMemcpy(feature_flipped_d, &features[0], npoints*dim*sizeof(float), cudaMemcpyHostToDevice);
+  cudaMemcpy(feature_flipped_d, &data[0], npoints*dim*sizeof(float), cudaMemcpyHostToDevice);
   float *feature_d;/* inverted data array */
   cudaMalloc((void**) &feature_d, npoints*dim*sizeof(float));
 
@@ -52,7 +33,7 @@ float* kmeans_cluster(size_t npoints, int dim, int nclusters,
 
   /* iterate until convergence */
   for (int iter = 0; iter < 500; iter ++) {
-    cudaMemcpy(centroids_d, centroids, nclusters*dim*sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(centroids_d, &centroids[0], nclusters*dim*sizeof(float), cudaMemcpyHostToDevice);
     find_closest_center<<<num_blocks, num_threads>>>(dim, npoints, nclusters, feature_d, membership_d, centroids_d, delta_d);
     //update_new_centers<<<grid, threads>>>(dim, npoints, nclusters, feature_flipped_d, membership_d, centroids_d, block_centroids_d);
     cudaThreadSynchronize();
@@ -68,7 +49,7 @@ float* kmeans_cluster(size_t npoints, int dim, int nclusters,
       int cluster_id = membership[i];
       new_centers_len[cluster_id]++;
       for (int j = 0; j < dim; j++)
-        new_centers[cluster_id*dim+j] += features[i*dim+j];
+        new_centers[cluster_id*dim+j] += data[i*dim+j];
     }
 
     // replace old cluster centers with new_centers 
@@ -90,6 +71,7 @@ float* kmeans_cluster(size_t npoints, int dim, int nclusters,
   cudaFree(centroids_d);
   //cudaFree(block_centroids_d);
   cudaFree(delta_d);
-  return centroids;
+  return &centroids[0];
 }
 
+template class Kmeans<float>;

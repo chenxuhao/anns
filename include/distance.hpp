@@ -1,4 +1,5 @@
 #pragma once
+#include <omp.h>
 
 inline int compute_distance_squared(int dim, const unsigned char* __restrict__ a, const unsigned char* __restrict__ b) {
   int ans = 0;
@@ -6,6 +7,16 @@ inline int compute_distance_squared(int dim, const unsigned char* __restrict__ a
   for(int i = 0;i < dim; ++ i)
     ans += (int(a[i]) - int(b[i])) * (int(a[i]) - int(b[i]));
   return ans;
+}
+
+template <typename T>
+inline T compute_distance(int dim, const T* __restrict__ a, const T* __restrict__ b) {
+  T ans = 0;
+  #pragma omp simd reduction(+ : ans)
+  for(int i = 0;i < dim; ++ i)
+    ans += (a[i] - b[i]) * (a[i] - b[i]);
+  return ans;
+  //return sqrt(compute_distance_squared(dim,a,b));
 }
 
 inline int compute_ip_distance(int dim, const unsigned char* __restrict__ a, const unsigned char* __restrict__ b) {
@@ -59,9 +70,5 @@ inline float compute_distance_squared(int dim, const float* __restrict__ a, cons
   }
   // horizontal add sum
   return _mm256_reduce_add_ps(sum);
-}
-
-inline float compute_distance(int dim, const float* __restrict__ a, const float* __restrict__ b) {
-  return sqrt(compute_distance_squared(dim,a,b));
 }
 

@@ -6,6 +6,14 @@
 #define BLOCKS_PER_DIM 16
 #define THREADS_PER_BLOCK THREADS_PER_DIM*THREADS_PER_DIM
 
+__global__ void invert_mapping(float *input, float *output, int n, int dim) {
+  int point_id = threadIdx.x + blockDim.x*blockIdx.x;
+  if (point_id < n) {
+    for (int i=0; i<dim; i++)
+      output[point_id + n*i] = input[point_id*dim+i];
+  }
+}
+
 typedef cub::BlockReduce<gpu_long_t, BLOCK_SIZE> BlockReduce;
 
 __global__ void find_closest_center(int dim, int npoints, int nclusters, float *features, int *membership, const float *centroids, gpu_long_t *delta) {

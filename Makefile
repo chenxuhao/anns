@@ -17,8 +17,8 @@ brute_force_gpu: $(CUINCS) $(OBJS) brute_force_gpu.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) brute_force_gpu.o -o $@ $(LIBS) $(NVLIBS)
 	mv $@ $(BIN)
 
-ivf_flat_cpu: $(INCS) $(OBJS) ivf_flat_cpu.o
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) ivf_flat_cpu.o -o $@ $(LIBS)
+ivf_flat_cpu: $(INCS) $(OBJS) ivf_flat_cpu.o kmeans_cpu.o
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) ivf_flat_cpu.o kmeans_cpu.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 ivf_flat_gpu: $(INCS) $(OBJS) ivf_flat_gpu.o kmeans_gpu.o
