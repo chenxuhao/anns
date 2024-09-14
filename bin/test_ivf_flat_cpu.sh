@@ -9,7 +9,7 @@ QSIZE=100
 
 DIM=128
 BIN=ivf_flat_cpu
-BIN=ivf_flat_gpu
+#BIN=ivf_flat_gpu
 DATADIR=../data
 BINDIR=../bin
 

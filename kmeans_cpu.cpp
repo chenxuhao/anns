@@ -15,10 +15,10 @@ T* Kmeans<T>::cluster_cpu() {
   //cout << "kmeans " << nclusters << " clusters, " << nthreads << " threads" << endl;
 
   vector<int> new_centers_len(nclusters);
-  vector<vector<float> > new_centers(nclusters,vector<float>(dim));
+  vector<vector<T> > new_centers(nclusters,vector<T>(dim));
   vector<vector<int> > partial_new_centers_len(nthreads,vector<int>(nclusters));
-  vector<vector<vector<float> > > partial_new_centers(nthreads,
-      vector<vector<float> >(nclusters,vector<float>(dim)));
+  vector<vector<vector<T> > > partial_new_centers(nthreads,
+      vector<vector<T> >(nclusters,vector<T>(dim)));
 
   // start clustering
   for (int iter = 0; iter < max_iter; iter ++) {
