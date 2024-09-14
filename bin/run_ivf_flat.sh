@@ -3,10 +3,13 @@
 DATASET=siftsmall
 DSIZE=0.01
 QSIZE=100
+DATASET=sift
+DSIZE=1
+QSIZE=10000
 
 DIM=128
 BIN=ivf_flat_cpu
-#BIN=ivf_flat_gpu
+BIN=ivf_flat_gpu
 DATADIR=~/proj/anns/data
 BINDIR=~/proj/anns/bin
 

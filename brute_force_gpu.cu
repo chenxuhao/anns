@@ -53,16 +53,20 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
     float thread_key[M];
     vidType thread_val[M];
     // each warp compares one point in the database
-    for (size_t i = K+warp_lane; i < npoints; i += NTASKS) {
+    auto NUM = (npoints-K-1) / NTASKS + 1;
+    for (size_t i = 0; i < NUM; i += 1) {
+    //for (size_t i = K+warp_lane; i < npoints; i += NTASKS) {
       for (int j = 0; j < ROUNDS; j++) {
         // in each rounds, every warp processes one data point
-        auto pid = i + j * WARPS_PER_BLOCK;
-        auto *p_data = data_vectors + pid * dim;
-        auto dist = cutils::compute_distance(dim, p_data, q_data);
-        if (thread_lane == 0) {
-          count_dc[warp_lane] += 1;
-          distances[warp_lane+K+j*WARPS_PER_BLOCK] = dist;
-          candidates[warp_lane+K+j*WARPS_PER_BLOCK] = pid;
+        auto pid = K + warp_lane + i * NTASKS + j * WARPS_PER_BLOCK;
+        if (pid < npoints) {
+          auto *p_data = data_vectors + pid * dim;
+          auto dist = cutils::compute_distance(dim, p_data, q_data);
+          if (thread_lane == 0) {
+            count_dc[warp_lane] += 1;
+            distances[warp_lane+K+j*WARPS_PER_BLOCK] = dist;
+            candidates[warp_lane+K+j*WARPS_PER_BLOCK] = pid;
+          }
         }
       }
       __syncthreads();
