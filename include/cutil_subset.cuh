@@ -204,6 +204,28 @@ __device__ __forceinline__ int upper_bound(int length, KeyT* keys, ValueT* value
   return location[warp_lane];
 }
 
+template <typename KeyT = float, typename ValueT = vidType>
+__device__ __forceinline__ int upper_bound_cta(int length, KeyT* keys, ValueT* values, KeyT bound) {
+  //int thread_lane = threadIdx.x & (WARP_SIZE-1);   // thread index within the warp
+  //int warp_lane   = threadIdx.x / WARP_SIZE;       // warp index within the CTA
+  typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
+  __shared__ BlockScan::TempStorage temp_storage;
+  __shared__ int location;
+  if (threadIdx.x == 0) location = 0;
+  __syncthreads();
+  int l = 0;
+  int r = length;
+  for (vidType i = threadIdx.x + l; i < r; i += BLOCK_SIZE) {
+    int found = 0;
+    if (keys[i] < bound) found = 1;
+    int position = 0, total_num = 0;
+    BlockScan(temp_storage).ExclusiveSum(found, position, total_num);
+    if (threadIdx.x == 0) location += total_num;
+    if (total_num != BLOCK_SIZE) break;
+  }
+  return location;
+}
+
 template <typename T>
 __forceinline__ __device__ bool binary_search_2phase(T *list, T *cache, T key, int size) {
   int p = (threadIdx.x / WARP_SIZE) * WARP_SIZE;
@@ -295,9 +317,6 @@ template <typename KeyT = vidType, typename ValueT = float>
 __forceinline__ __device__ int set_difference_cta(int size_a, KeyT* key_a, ValueT* val_a, 
                                                   int size_b, KeyT* key_b, ValueT* val_b,
                                                   KeyT* key_c, ValueT* val_c) {
-  int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
-  int warp_lane   = threadIdx.x / WARP_SIZE;       // warp index within the CTA
-
   typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
   __shared__ BlockScan::TempStorage temp_storage;
 
@@ -328,10 +347,20 @@ template <typename KeyT = vidType, typename ValueT = float>
 __forceinline__ __device__ int set_union(int size_a, KeyT* key_a, ValueT* val_a, 
                                          int size_b, KeyT* key_b, ValueT* val_b,
                                          KeyT* key_c, ValueT* val_c) {
-  int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
+  //int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
   int warp_lane   = threadIdx.x / WARP_SIZE;       // warp index within the CTA
   __shared__ int count[WARPS_PER_BLOCK];
   return count[warp_lane];
+} 
+
+template <typename KeyT = vidType, typename ValueT = float>
+__forceinline__ __device__ int set_union_cta(int size_a, KeyT* key_a, ValueT* val_a, 
+                                             int size_b, KeyT* key_b, ValueT* val_b,
+                                             KeyT* key_c, ValueT* val_c) {
+  //int thread_lane = threadIdx.x & (WARP_SIZE-1); // thread index within the warp
+  //int warp_lane   = threadIdx.x / WARP_SIZE;       // warp index within the CTA
+  __shared__ int count;
+  return count;
 } 
 
 } // end namespace

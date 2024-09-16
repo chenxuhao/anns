@@ -13,10 +13,10 @@ GRAPH=graph
 K=32
 DIM=128
 
-BIN_PATH=../bin
-DATA_PATH=../data/$DATA
+BIN_PATH=~/proj/anns/bin
+DATA_PATH=~/proj/anns/data/$DATA
 BIN=graph_search_cpu
-#BIN=graph_search_gpu
+BIN=graph_search_gpu
 
 echo "$BIN_PATH/$BIN $DATA_PATH/$DATA\_base.fvecs \
   $DATA_PATH/$DATA\_query.fvecs \

@@ -130,6 +130,7 @@ public:
     auto h_colidx = hg.get_adj();
     if (h_colidx != NULL)
       CUDA_SAFE_CALL(cudaMemcpy(d_colidx, h_colidx, ne * sizeof(vidType), cudaMemcpyHostToDevice));
+    std::cout << "Done\n";
   }
   void init(Graph<T> &g, int n, int m) {
     device_id = n;
@@ -139,13 +140,6 @@ public:
   void init(Graph<T> &hg) {
     auto nv = hg.V();
     auto ne = hg.E();
-    size_t mem_vert = size_t(nv+1)*sizeof(eidType);
-    size_t mem_edge = size_t(ne)*sizeof(vidType);
-    size_t mem_graph = mem_vert + mem_edge;
-    size_t mem_el = mem_edge; // memory for the edgelist
-    size_t mem_all = mem_graph + mem_el;
-    auto mem_gpu = cutils::get_gpu_mem_size();
-    bool use_uva = mem_all > mem_gpu;
     max_degree = hg.max_degree();
     allocateFrom(nv, ne);
     copyToDevice(hg);
