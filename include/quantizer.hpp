@@ -47,7 +47,7 @@ public:
 
   ~Quantizer() {
     for (int i = 0; i < m; i++) {
-      delete [] centroids[i];
+      if (centroids[i] == NULL) delete [] centroids[i];
     }
   }
 
@@ -61,9 +61,13 @@ public:
       // gather the i-th subvector from each vector in the database
       for (size_t j = 0; j < n; j++)
         std::memcpy(&subvectors[j*sub_dim], start+j*dim, sub_dim*sizeof(T));
-      std::vector<int> membership(n);
       // find the centroids in the i-th subvector space using k-means clustering
-      centroids[i] = kmeans_cluster<T>(n, sub_dim, nclusters, &subvectors[0], membership);
+      Kmeans<T> kmeans(n, sub_dim, nclusters, &subvectors[0]);
+      centroids[i] = kmeans.cluster_cpu();
+      assert(centroids[i] != NULL);
+      auto membership = kmeans.get_membership();
+      //std::vector<int> membership(n);
+      //centroids[i] = kmeans_cluster<T>(n, sub_dim, nclusters, &subvectors[0], membership);
       // update the codebook
       for (size_t j = 0; j < n; j++)
         codebook[j][i] = CT(membership[j]);

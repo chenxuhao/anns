@@ -44,4 +44,7 @@ class Kmeans {
     }
     return clusters;
   }
+  std::vector<int> get_membership() {
+    return membership;
+  }
 };

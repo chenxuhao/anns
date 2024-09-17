@@ -1,8 +1,8 @@
 #!/bin/bash
 
 BIN=quantized_search_cpu
-BIN_PATH=../bin
-DATA_PATH=../data
+BIN_PATH=~/proj/anns/bin
+DATA_PATH=~/proj/anns/data
 OUTFILE=output.txt
 
 DATASET=siftsmall
