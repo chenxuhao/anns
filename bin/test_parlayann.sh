@@ -5,8 +5,8 @@ GRAPH=graph
 NQ=100
 NP=0.01
 
-BIN_PATH=../bin
-DATA_PATH=../data/$DATA
+BIN_PATH=~/proj/anns/bin
+DATA_PATH=~/proj/anns/data/$DATA
 BIN=parlayann_cpu
 K=32
 DIM=128

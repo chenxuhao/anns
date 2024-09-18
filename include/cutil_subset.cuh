@@ -206,6 +206,13 @@ __device__ __forceinline__ int upper_bound(int length, KeyT* keys, ValueT* value
 
 template <typename KeyT = float, typename ValueT = vidType>
 __device__ __forceinline__ int upper_bound_cta(int length, KeyT* keys, ValueT* values, KeyT bound) {
+  return 0;
+}
+
+template <typename KeyT = float>
+__device__ __forceinline__ int upper_bound_cta(int length, KeyT* keys, KeyT bound) {
+  assert(length >= 0);
+  if (length == 0) return 0;
   //int thread_lane = threadIdx.x & (WARP_SIZE-1);   // thread index within the warp
   //int warp_lane   = threadIdx.x / WARP_SIZE;       // warp index within the CTA
   typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
@@ -213,17 +220,22 @@ __device__ __forceinline__ int upper_bound_cta(int length, KeyT* keys, ValueT* v
   __shared__ int location;
   if (threadIdx.x == 0) location = 0;
   __syncthreads();
-  int l = 0;
-  int r = length;
-  for (vidType i = threadIdx.x + l; i < r; i += BLOCK_SIZE) {
+
+  int round = (length - 1) / BLOCK_SIZE + 1;
+  for (vidType i = threadIdx.x; i < round * BLOCK_SIZE; i += BLOCK_SIZE) {
     int found = 0;
-    if (keys[i] < bound) found = 1;
+    if (i < length && keys[i] < bound) found = 1;
     int position = 0, total_num = 0;
     BlockScan(temp_storage).ExclusiveSum(found, position, total_num);
     if (threadIdx.x == 0) location += total_num;
+    __syncthreads();
     if (total_num != BLOCK_SIZE) break;
   }
-  return location;
+  //if (location > length && (threadIdx.x < 128 || threadIdx.x == 127)) printf("tid=%d, overflow: location=%d, length=%d\n", threadIdx.x, location, length);
+  //assert(location <= length);
+  int pos = location == length? location - 1 : location;
+  //if (location == length) return location - 1;
+  return pos;
 }
 
 template <typename T>
