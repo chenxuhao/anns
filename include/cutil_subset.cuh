@@ -232,10 +232,10 @@ __device__ __forceinline__ int upper_bound_cta(int length, KeyT* keys, KeyT boun
     if (total_num != BLOCK_SIZE) break;
   }
   //if (location > length && (threadIdx.x < 128 || threadIdx.x == 127)) printf("tid=%d, overflow: location=%d, length=%d\n", threadIdx.x, location, length);
-  //assert(location <= length);
-  int pos = location == length? location - 1 : location;
+  assert(location <= length);
+  //int pos = location == length? location - 1 : location;
   //if (location == length) return location - 1;
-  return pos;
+  return location;//pos;
 }
 
 template <typename T>
@@ -259,33 +259,6 @@ __forceinline__ __device__ bool binary_search_2phase(T *list, T *cache, T key, i
   while (top >= bottom) {
     mid = (top + bottom) / 2;
     auto y = list[mid];
-    if (key == y) return true;
-    if (key < y) top = mid - 1;
-    else bottom = mid + 1;
-  }
-  return false;
-}
-
-template <typename T = vidType>
-__forceinline__ __device__ bool binary_search_2phase_cta(T *list, T *cache, T key, int size) {
-  vidType y = 0;
-  int mid = 0;
-  // phase 1: cache
-  int bottom = 0;
-  int top = BLOCK_SIZE;
-  while (top > bottom + 1) {
-    mid = (top + bottom) / 2;
-    y = cache[mid];
-    if (key == y) return true;
-    if (key < y) top = mid;
-    if (key > y) bottom = mid;
-  }
-  //phase 2
-  bottom = bottom * size / BLOCK_SIZE;
-  top = top * size / BLOCK_SIZE - 1;
-  while (top >= bottom) {
-    mid = (top + bottom) / 2;
-    y = list[mid];
     if (key == y) return true;
     if (key < y) top = mid - 1;
     else bottom = mid + 1;
@@ -325,6 +298,30 @@ __forceinline__ __device__ int set_difference_warp(int size_a, KeyT* key_a, Valu
   return count[warp_lane];
 }
 
+template <typename T1, typename T2>
+__device__ bool linear_search(T1* list1, T2* list2, T1 key1, T2 key2, int len) {
+  for (int i = 0; i < len; i++) {
+    if (list1[i] == key1 && list2[i] == key2) return true;
+  }
+  return false;
+}
+
+template <typename T1, typename T2>
+__forceinline__ __device__ bool binary_search(T1* list1, T2* list2, T1 key1, T2 key2, int size) {
+  if (size < 1) return false;
+  int l = 0;
+  int r = size-1;
+  while (r >= l) { 
+    int mid = l + (r - l) / 2; 
+    auto v1 = list1[mid];
+    auto v2 = list2[mid];
+    if (v1 == key1 && v2 == key2) return true;
+    if (v1 < key1) l = mid + 1;
+    else r = mid - 1;
+  }
+  return false;
+}
+
 template <typename KeyT = vidType, typename ValueT = float>
 __forceinline__ __device__ int set_difference_cta(int size_a, KeyT* key_a, ValueT* val_a, 
                                                   int size_b, KeyT* key_b, ValueT* val_b,
@@ -333,24 +330,32 @@ __forceinline__ __device__ int set_difference_cta(int size_a, KeyT* key_a, Value
   __shared__ BlockScan::TempStorage temp_storage;
 
   __shared__ int count;
-  __shared__ KeyT cache[BLOCK_SIZE];
-  cache[threadIdx.x] = key_b[threadIdx.x * size_b / BLOCK_SIZE];
   if (threadIdx.x == 0) count = 0;
   __syncthreads();
-  for (vidType i = threadIdx.x; i < size_a; i += BLOCK_SIZE) {
-    auto key = key_a[i];
-    auto val = val_a[i];
+
+  int round = (size_a - 1) / BLOCK_SIZE + 1;
+  for (vidType i = threadIdx.x; i < round * BLOCK_SIZE; i += BLOCK_SIZE) {
     int found = 0;
-    if (binary_search_2phase_cta(key_b, cache, key, size_b))
-      found = 1;
+    KeyT key = 0;
+    ValueT val = FLT_MAX;
+    if (i < size_a) {
+      key = key_a[i];
+      val = val_a[i];
+      if (!binary_search(val_b, key_b, val, key, size_b)) {
+        found = 1;
+      }
+    }
+    __syncthreads();
     // TODO: PrefixSum
     int position = 0, total_num = 0;
     BlockScan(temp_storage).ExclusiveSum(found, position, total_num);
     if (found) {
-      if (threadIdx.x == 0) count += 1;
-      key_c[position] = key;
-      val_c[position] = val;
+      int index = count + position;
+      key_c[index] = key;
+      val_c[index] = val;
     }
+    if (threadIdx.x == 0) count += total_num;
+    __syncthreads();
   }
   return count;
 }
@@ -374,5 +379,16 @@ __forceinline__ __device__ int set_union_cta(int size_a, KeyT* key_a, ValueT* va
   __shared__ int count;
   return count;
 } 
+
+template <typename T>
+__device__ T myhash(T key) {
+  // A simple hash function (based on MurmurHash)
+  key ^= key >> 16;
+  key *= 0x85ebca6b;
+  key ^= key >> 13;
+  key *= 0xc2b2ae35;
+  key ^= key >> 16;
+  return key;
+}
 
 } // end namespace

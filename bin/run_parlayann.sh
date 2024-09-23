@@ -10,9 +10,10 @@ GRAPH=graph
 NQ=10000
 NP=1
 
-BIN_PATH=../bin
-DATA_PATH=../data/$DATA
+BIN_PATH=~/proj/anns/bin
+DATA_PATH=~/proj/anns/data/$DATA
 BIN=parlayann_cpu
+#BIN=graph_search_gpu
 K=32
 DIM=128
 
