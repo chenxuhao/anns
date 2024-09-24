@@ -231,10 +231,7 @@ __device__ __forceinline__ int upper_bound_cta(int length, KeyT* keys, KeyT boun
     __syncthreads();
     if (total_num != BLOCK_SIZE) break;
   }
-  //if (location > length && (threadIdx.x < 128 || threadIdx.x == 127)) printf("tid=%d, overflow: location=%d, length=%d\n", threadIdx.x, location, length);
-  assert(location <= length);
-  //int pos = location == length? location - 1 : location;
-  //if (location == length) return location - 1;
+  //assert(location <= length);
   return location;//pos;
 }
 
@@ -325,7 +322,7 @@ __forceinline__ __device__ bool binary_search(T1* list1, T2* list2, T1 key1, T2 
 template <typename KeyT = vidType, typename ValueT = float>
 __forceinline__ __device__ int set_difference_cta(int size_a, KeyT* key_a, ValueT* val_a, 
                                                   int size_b, KeyT* key_b, ValueT* val_b,
-                                                  KeyT* key_c, ValueT* val_c) {
+                                                  int size_c, KeyT* key_c, ValueT* val_c) {
   typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
   __shared__ BlockScan::TempStorage temp_storage;
 
@@ -351,8 +348,10 @@ __forceinline__ __device__ int set_difference_cta(int size_a, KeyT* key_a, Value
     BlockScan(temp_storage).ExclusiveSum(found, position, total_num);
     if (found) {
       int index = count + position;
-      key_c[index] = key;
-      val_c[index] = val;
+      if (index < size_c) {
+        key_c[index] = key;
+        val_c[index] = val;
+      }
     }
     if (threadIdx.x == 0) count += total_num;
     __syncthreads();

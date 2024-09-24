@@ -8,7 +8,7 @@
 // hyperparameters
 #define BEAM_SIZE BLOCK_SIZE
 #define MAX_DEG 32
-#define NUM_START 100
+#define NUM_START 128
 #define LIMIT 10000
 #define EXPAND_RATE 4 //BLOCK_SIZE/MAX_DEG
 #define CANDIDATE_SIZE EXPAND_RATE*MAX_DEG
@@ -51,25 +51,20 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
 
   // The subset of the frontier that has not been visited
   // Use the first of these to pick next vertex to visit.
-  __shared__ vidType unvisited_frontier[BEAM_SIZE];
-  __shared__ T ufr_dist[BEAM_SIZE];
+  __shared__ vidType unvisited_frontier[EXPAND_RATE];
+  __shared__ T ufr_dist[EXPAND_RATE];
 
   // maintains sorted set of visited vertices (id-distance pairs)
   __shared__ vidType visited[VISITED_SIZE];
   __shared__ T visited_dist[VISITED_SIZE];
   __shared__ int visited_size;
 
-  // used as temporaries in the loop
-  //__shared__ vidType new_frontier[BEAM_SIZE+MAX_DEG];
-  //__shared__ T nfr_dist[BEAM_SIZE+MAX_DEG];
-
   auto candidates = frontier + BEAM_SIZE;
   auto cand_dists = fro_dist + BEAM_SIZE;
 
   // counters
   __shared__ uint64_t count_dc[WARPS_PER_BLOCK];
-  __shared__ int num_visited, remain, cand_size, num_hops;
-  // frontier_size 
+  __shared__ int num_visited, remain, num_hops;
  
   // for sorting
   typedef cub::BlockRadixSort<T, BLOCK_SIZE, MB, vidType> BlockRadixSort;
@@ -77,22 +72,17 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
   typedef cub::BlockRadixSort<T, BLOCK_SIZE, MC, vidType> BlockRadixSortC;
   __shared__ typename BlockRadixSortC::TempStorage temp_storageC;
 
-  // fro PrefixSum
-  typedef cub::BlockScan<int, BLOCK_SIZE> BlockScan;
-  __shared__ BlockScan::TempStorage temp_storageS;
-
   // initialize the hash filter
   //__shared__ vidType hash_filter[HASH_FILTER_SIZE];
   vidType *hash_filter = &filters[blockIdx.x * HASH_FILTER_SIZE];
   auto max_deg = g.get_max_degree();
 
+  // initialize the counter
+  if (thread_lane == 0) count_dc[warp_lane] = 0;
+
   // each thread block takes a query
   for (int qid = blockIdx.x; qid < qsize; qid += gridDim.x) {
-    //if (threadIdx.x < 1) printf("qid=%d\n", qid);
     const T *q_data = queries + qid * dim;
-
-    // initialize the counter
-    if (thread_lane == 0) count_dc[warp_lane] = 0;
 
     // initialize the frontier
     for (int j = 0; j < MC; j++) fro_dist[j*BLOCK_SIZE+threadIdx.x] = FLT_MAX;
@@ -112,14 +102,12 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
       // each warp computes a distance
       auto dist = cutils::compute_distance<T>(dim, v_data, q_data);
       if (thread_lane == 0) {
-        //if (qid == 0) printf("qid=%d, sv[%d]=%d, dist=%f\n", qid, i, v, dist);
         count_dc[warp_lane] += 1;
         frontier[i] = v;
         fro_dist[i] = dist;
       }
     }
     __syncthreads();
-    //if (thread_lane < 1) printf("qid=%d, wid=%d, count=%d\n", qid, warp_lane, count_dc[warp_lane]);
 
     // sort the beam (in frontier)
     {
@@ -137,9 +125,9 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
     }
     __syncthreads();
     // deduplication
-    if (threadIdx.x < BEAM_SIZE && frontier[threadIdx.x + 1] == frontier[threadIdx.x]) fro_dist[threadIdx.x + 1] = FLT_MAX;
+    if (threadIdx.x < BEAM_SIZE && frontier[threadIdx.x + 1] == frontier[threadIdx.x])
+      fro_dist[threadIdx.x + 1] = FLT_MAX;
     __syncthreads();
-    //if (qid == 0) printf("qid=%d, frontier[%d]=%d, dist=%f\n", qid, threadIdx.x, frontier[threadIdx.x], fro_dist[threadIdx.x]);
 
     // get ready for expansion
     if (threadIdx.x < EXPAND_RATE) {
@@ -157,7 +145,7 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
     // The main loop. Terminate beam search when the entire frontier
     // has been visited or have reached max_visit.
     while (remain > 0 && num_visited < LIMIT) {
-      if (threadIdx.x == 0) cand_size = 0;
+      //if (threadIdx.x == 0) cand_size = 0;
       if (threadIdx.x == 0) num_hops += 1;
       __syncthreads();
 
@@ -178,10 +166,8 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
           visited_dist[BEAM_SIZE+i] = v_dist;
         }
         if (thread_lane < max_deg) candidates[max_deg*i+thread_lane] = v_ptr[thread_lane];
-        //if (qid==0 && thread_lane == 0) printf("qid=%d, v=%d, dist=%f\n", qid, v, v_dist);
       }
       __syncthreads();
-      //if (qid==0 && thread_lane == 0) printf("qid=%d, warp_lane=%d, visited updated\n", qid, warp_lane);
 
       // sort visited queue
       {
@@ -198,7 +184,6 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
         }
       }
       __syncthreads();
-      //if (qid==0 && threadIdx.x == 0) printf("qid=%d, visited sorted\n", qid);
  
       if (threadIdx.x == 0) {
         num_visited += num;
@@ -216,16 +201,16 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
       // each warp takes one neighbor, to compute distance
       for (auto e = warp_lane; e < max_deg*num; e += WARPS_PER_BLOCK) {
         auto u = candidates[e];
-        auto *u_data = data_vectors + u * dim;
-        auto dist = cutils::compute_distance<T>(dim, u_data, q_data);
-        if (thread_lane == 0) {
-          count_dc[warp_lane] += 1;
-          // keep neighbors that have not been visited (using approximate hash).
-          if (!has_been_seen(u, hash_filter)) {
+        // keep neighbors that have not been visited (using approximate hash).
+        if (!has_been_seen(u, hash_filter)) {
+          auto *u_data = data_vectors + u * dim;
+          auto dist = cutils::compute_distance<T>(dim, u_data, q_data);
+          if (thread_lane == 0) {
+            count_dc[warp_lane] += 1;
             cand_dists[e] = dist;
-            cand_size += 1;
-          } else cand_dists[e] = FLT_MAX;
-        }
+            //cand_size += 1;
+          }
+        } else if (thread_lane == 0) cand_dists[e] = FLT_MAX;
       }
       //if (qid==0 && threadIdx.x == 0) printf("qid=%d, visited_size=%d, cand_size=%d\n", qid, visited_size, cand_size);
       //if (num_hops < 3 && qid==0 && threadIdx.x < cand_size) printf("qid=%d, cand[%d]=%d, dist=%f\n", qid, threadIdx.x, candidates[threadIdx.x], cand_dists[threadIdx.x]);
@@ -269,15 +254,11 @@ BeamSearch(int K, int qsize, int dim, size_t npoints,
       // get the unvisited frontier (we only care about the first one) and update "remain"
       int ndiff = cutils::set_difference_cta<vidType, T>(BEAM_SIZE, frontier, fro_dist,        // set A
                                                          visited_size, visited, visited_dist,  // set B
-                                                         unvisited_frontier, ufr_dist);        // set C = A - B
+                                                         EXPAND_RATE, unvisited_frontier, ufr_dist);        // set C = A - B
       if (threadIdx.x == 0) remain = ndiff;
       __syncthreads();
       if (threadIdx.x < ndiff && ufr_dist[threadIdx.x] == FLT_MAX) atomicSub(&remain, 1);
       //if (qid==0 && threadIdx.x < 1) printf("qid=%d, nhops=%d, visited_size=%d, remain=%d, next=%d\n", qid, num_hops, visited_size, remain, unvisited_frontier[0]);
-      //if (unvisited_frontier[0] >= g.V())
-      //  if (threadIdx.x < 128) printf("qid=%d, frontier[%d]=%d, dist=%f\n", qid, threadIdx.x, frontier[threadIdx.x], fro_dist[threadIdx.x]);
- 
-    //*/
     }
     for (int i = threadIdx.x; i < K; i += blockDim.x)
       results[qid * K + i] = frontier[i];
@@ -315,7 +296,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   int *d_results;
   CUDA_SAFE_CALL(cudaMalloc((void **)&d_results, qsize * K * sizeof(int)));
   vidType *d_filters;
-  printf("filter size = %d bytes\n", num_blocks * HASH_FILTER_SIZE * sizeof(vidType));
+  //printf("filter size = %d bytes\n", num_blocks * HASH_FILTER_SIZE * sizeof(vidType));
   CUDA_SAFE_CALL(cudaMalloc((void **)&d_filters, num_blocks * HASH_FILTER_SIZE * sizeof(vidType)));
 
   gpu_long_t *d_total_count_dc;
@@ -332,18 +313,18 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   CUDA_SAFE_CALL(cudaMalloc((void **)&d_starting_points, NUM_START * sizeof(vidType)));
   CUDA_SAFE_CALL(cudaMemcpy(d_starting_points, starting_points, NUM_START * sizeof(vidType), cudaMemcpyHostToDevice));
 
-  //cudaProfilerStart();
   Timer t;
   t.Start();
+  cudaProfilerStart();
   BeamSearch<T><<<num_blocks, num_threads>>>(K, qsize, dim, npoints, 
-                                          d_queries, d_data, d_results, 
-                                          d_total_count_dc,
-                                          d_starting_points,
-                                          d_filters,
-                                          gg);
+                                             d_queries, d_data, d_results, 
+                                             d_total_count_dc,
+                                             d_starting_points,
+                                             d_filters,
+                                             gg);
   CUDA_SAFE_CALL(cudaDeviceSynchronize());
+  cudaProfilerStop();
   t.Stop();
-  //cudaProfilerStop();
 
   double runtime = t.Seconds();
   CUDA_SAFE_CALL(cudaMemcpy(h_results, d_results, qsize * K * sizeof(int), cudaMemcpyDeviceToHost));
@@ -357,7 +338,8 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   auto latency = runtime / qsize * 1000.0;
   std::cout << "runtime [bfs_search_gpu] = " << runtime << " sec\n";
   std::cout << "throughput = " << throughput << " queries per second (QPS)\n";
-  std::cout << "average # distance computation: " << npoints << "\n";
+  std::cout << "total # distance computation: " << total_count_dc << "\n";
+  std::cout << "average # distance computation: " << total_count_dc / qsize << "\n";
 }
 
 template class ANNS<float>;
