@@ -71,4 +71,3 @@ inline float compute_distance_squared(int dim, const float* __restrict__ a, cons
   // horizontal add sum
   return _mm256_reduce_add_ps(sum);
 }
-

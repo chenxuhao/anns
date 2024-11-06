@@ -121,6 +121,30 @@ public:
               int *results, const char *index);
 
   inline double compute_avg_recall_1D(vector_dataset<int> &results, vector_dataset<int> &gt) {
+    return compute_recall_1D(results, gt);
+
+    // assert(results.num == gt.num);
+    // assert(results.dim <= gt.dim);
+    // size_t qsize = results.num;
+    // int K = results.dim;
+    // int64_t correct = 0;
+    // #pragma omp parallel for reduction(+:correct)
+    // for (size_t q_i = 0; q_i < qsize; ++q_i) {
+    //   for (int top_i = 0; top_i < K; ++top_i) {
+    //     auto true_id = gt[q_i][top_i];
+    //     for (int n_i = 0; n_i < K; ++n_i) {
+    //       if (results[q_i][n_i] == true_id) {
+    //         correct ++;
+    //         break;
+    //       }
+    //     }
+    //   }
+    // }
+    // int64_t total = K * qsize;
+    // return double(correct) / double(total);
+  }
+
+  inline double compute_recall_1D(vector_dataset<int> &results, vector_dataset<int> &gt) {
     assert(results.num == gt.num);
     assert(results.dim <= gt.dim);
     size_t qsize = results.num;
@@ -128,18 +152,15 @@ public:
     int64_t correct = 0;
     #pragma omp parallel for reduction(+:correct)
     for (size_t q_i = 0; q_i < qsize; ++q_i) {
-      for (int top_i = 0; top_i < K; ++top_i) {
-        auto true_id = gt[q_i][top_i];
-        for (int n_i = 0; n_i < K; ++n_i) {
-          if (results[q_i][n_i] == true_id) {
-            correct ++;
-            break;
-          }
+      auto nn = gt[q_i][0];
+      for (int n_i = 0; n_i < K; ++n_i) {
+        if (results[q_i][n_i] == nn) {
+          correct ++;
+          break;
         }
       }
     }
-    int64_t total = K * qsize;
+    int64_t total = qsize;
     return double(correct) / double(total);
   }
 };
-

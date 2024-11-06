@@ -2,6 +2,7 @@
 #include "kmeans.hpp"
 #include "utils.hpp"
 #include "distance.hpp"
+
 using namespace std;
 
 // everything currently only works for euclidean distance

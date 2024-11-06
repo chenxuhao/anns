@@ -1,7 +1,18 @@
 #include <cstring>
 #include <algorithm>
+#include <queue>
+
+#include <faiss/IndexFlat.h>
+#include <faiss/IndexIVFPQ.h>
+#include <faiss/IndexPreTransform.h>
+#include <faiss/IndexRefine.h>
+#include <faiss/IndexPQ.h>
+#include <faiss/Index.h>
+#include <faiss/IndexIVF.h>
+#include <faiss/VectorTransform.h>
+
 #include "utils.hpp"
-#include "kmeans.hpp"
+#include "distance.hpp"
 
 using namespace std;
 
@@ -11,120 +22,172 @@ private:
   int m; // number of sub-spaces
   int nclusters; // number of clusters in each sub-space
   int dim; // number of dimentions of each vector
-  int sub_dim; // number of dimentions of each subvector
+  int sub_dim; // number of dimensions of each subvector
   size_t n; // number of vectors in the database
-  vector<vector<CT>> codebook; // n * m; compressed type CT
-  vector<T*> centroids; // m * ncluster * sub_dim
-  vector<vector<float>> lookup_table; // m * ncluster
+  faiss::IndexFlatL2* quantizer; // trained quantizer (and sub-quantizers)
+  faiss::IndexPQ* index; // trained index (for faiss search)
+  vector<vector<CT>> codebook;
+  vector<T*> centroids; // m * ncluster * sub_dim; PQ centroids
+  vector<vector<T>> lookup_table; // m * ncluster
 
 public:
   Quantizer(int m_, int nclusters_, int dim_, size_t n_, const T* data_vectors) :
-    m(m_), nclusters(nclusters_), dim(dim_), n(n_) {
+    m(m_), nclusters(nclusters_), dim(dim_), n(n_), quantizer(nullptr), index(nullptr) {
     assert(dim % m == 0);
     sub_dim = dim / m;
     printf("Quantizer: m=%d, nclusters=%d, dim=%d, n=%lu\n", m, nclusters, dim, n);
-    codebook.resize(n);
-    centroids.resize(m);
-    lookup_table.resize(m);
-    for (size_t i = 0; i < n; i++)
-      codebook[i].resize(m);
-    for (int i = 0; i < m; i++)
-      lookup_table[i].resize(nclusters);
 
-    printf("Train centroid ... \n");
+    centroids.resize(m, 0);
+    codebook.resize(n, std::vector<CT>(m, 0));
+    lookup_table.resize(m, std::vector<T>(nclusters, 0));
+
+    train_centroids_and_build_codebook(data_vectors);
+  }
+
+  ~Quantizer() {}
+
+  void train_centroids_and_build_codebook(const T* data) {
     Timer t;
+    printf("Train centroid ... \n");
+
     t.Start();
-    train_centroids(data_vectors);
+    quantizer = new faiss::IndexFlatL2(dim);
+    // index = new faiss::IndexIVFPQ(quantizer, dim, 1, m, 63 - __builtin_clzll(nclusters));
+    index = new faiss::IndexPQ(dim, m, 63 - __builtin_clzll(nclusters));
+
+    index->train(n, data);
+    index->add(n, data);
+
     t.Stop();
     printf("time = %f\n", t.Seconds());
 
-    //printf("Build codebook ... \n");
-    //t.Start();
-    //build_codebook(data_vectors);
-    //t.Stop();
-    //printf("time = %f\n", t.Seconds());
-  }
+    printf("Build codebook ... \n");
+    t.Start();
 
-  ~Quantizer() {
-    for (int i = 0; i < m; i++) {
-      if (centroids[i] == NULL) delete [] centroids[i];
+    // centroid table (m, nclusters, sub_dim)
+    for (auto i = 0; i < m; ++i) {
+      centroids[i] = index->pq.get_centroids(i, 0);
     }
-  }
 
-  void train_centroids(const T *data) {
-    //vector<T> subvectors(sub_dim*n);
-    T* subvectors = (T*)aligned_alloc(32, n*sub_dim*sizeof(T));
-    // for each subvector space
-    for (int i = 0; i < m; i++) {
-      // i-th sub-vector
-      auto start = data + i*sub_dim;
-      // gather the i-th subvector from each vector in the database
-      for (size_t j = 0; j < n; j++)
-        std::memcpy(&subvectors[j*sub_dim], start+j*dim, sub_dim*sizeof(T));
-      // find the centroids in the i-th subvector space using k-means clustering
-      Kmeans<T> kmeans(n, sub_dim, nclusters, &subvectors[0]);
-      centroids[i] = kmeans.cluster_cpu();
-      assert(centroids[i] != NULL);
-      auto membership = kmeans.get_membership();
-      //std::vector<int> membership(n);
-      //centroids[i] = kmeans_cluster<T>(n, sub_dim, nclusters, &subvectors[0], membership);
-      // update the codebook
-      for (size_t j = 0; j < n; j++)
-        codebook[j][i] = CT(membership[j]);
-      //subvectors.clear();
-      //for (int j = 0; j < 10; j++)
-      //  printf("c[%d][%d]=%f\t", i, j, centroids[i][j]);
-      //printf("\n");
-    }
-  }
-
-  void build_codebook(const T *data) {
-    // for each data point
     #pragma omp parallel for
-    for (size_t i = 0; i < n; i++) {
-      // i-th data point
-      auto data_i = data + i*dim;
-      // for each sub-vector space
-      for (int j = 0; j < m; ++j) {
-        // j-th sub-vector
-        auto subvector = data_i + j*sub_dim;
-        // centroids in the j-th sub-space
+    for (auto i = 0; i < n; ++i) {
+      // for each vector `x_i`
+      auto x_i = data + i * dim;
+      // for each subspace `j`
+      for (auto j = 0; j < m; ++j) {
+        float min_dist = __builtin_inff();
+        uint16_t best_idx = 0;
+
+        auto sub_xi = x_i + j * sub_dim;
         auto c_j = centroids[j];
-        // find the closest centroid
-        uint32_t bestIndex = 0;
-        auto minDist = compute_distance_squared(sub_dim, subvector, c_j);
-        for (int k = 1; k < nclusters; ++k) {
-          // k-th centroid
-          c_j += sub_dim;
-          auto dist = compute_distance_squared(sub_dim, subvector, c_j);
-          // is it closer?
-          if (dist < minDist) {
-            minDist = dist;
-            bestIndex = k;
+        for (auto k = 0; k < nclusters; ++k) {
+          auto c_jk = c_j + k * sub_dim;
+          auto dist = compute_distance_squared(sub_dim, sub_xi, c_jk);
+          if (dist < min_dist) {
+            min_dist = dist;
+            best_idx = k;
           }
         }
-        codebook[i][j] = CT(bestIndex);
+        codebook[i][j] = best_idx;
       }
-      if (i > 10) continue;
-      //for (int j = 0; j < m; j++)
-      //  printf("codebook[%ld][%d]=%d\t", i, j, codebook[i][j]);
-      //printf("\n");
+    }
+
+    t.Stop();
+    printf("time = %f\n", t.Seconds());
+  }
+
+  void search(const T* query, const T* center, int k, int* results) {
+    std::vector<std::vector<T>> lookup_table(m, std::vector<T>(nclusters, 0));
+    build_lookup_table(query, center, lookup_table);
+    std::priority_queue<std::pair<float, int>> S;
+    for (size_t i = 0; i < n; ++i) {
+      const auto dist = quantized_distance(i, lookup_table);
+      S.emplace(dist, i);
+      if ((int)S.size() > k) {
+        S.pop();
+      }
+    }
+    for (auto i = 0; i < k; ++i) {
+      results[i] = S.top().second; S.pop();
+    }
+  }
+
+  void faiss_search(const T* query, int k, int* results) {
+    std::vector<faiss::idx_t> I(k);
+    std::vector<float> D(k);
+    index->search(1, query, k, D.data(), I.data());
+    for (auto i = 0; i < k; ++i) {
+      results[i] = (int)I[i];
+    }
+  }
+
+  void faiss_search_batch(int n, const T* queries, int k, int* results) {
+    std::vector<faiss::idx_t> I(n * k);
+    std::vector<float> D(n * k);
+    index->search(n, queries, k, D.data(), I.data());
+    for (auto i = 0; i < n * k; ++i) {
+      results[i] = (int)I[i];
     }
   }
 
   // build the lookup table given a query
-  void build_lookup_table(const T * query) {
+  void build_lookup_table(const T *query) {
     // for each sub-vector space
-    //#pragma omp parallel for
+    #pragma omp parallel for
     for (int i = 0; i < m; i++) {
-      // centroids in i-th sub-space
-      auto c_i = centroids[i];
       // i-th sub-vector of the query
-      auto q_i = query+i*sub_dim;
+      auto q_i = query + i * sub_dim;
       // for each centroid
+      auto c_i = centroids[i];
       for (int j = 0; j < nclusters; j++) {
         // j-th centroid in i-th sub-space
-        auto c_ij = c_i + j*sub_dim;
+        auto c_ij = c_i + j * sub_dim;
+        lookup_table[i][j] = compute_distance_squared(sub_dim, q_i, c_ij);
+      }
+    }
+  }
+
+  void compute_residual(int dim, const float* __restrict__ a, 
+                                const float* __restrict__ b, 
+                                float* __restrict__ residual) {
+    a = (const float *)__builtin_assume_aligned(a, 32);
+    b = (const float *)__builtin_assume_aligned(b, 32);
+    residual = (float *)__builtin_assume_aligned(residual, 32);
+
+    // assume size is divisible by 8
+    uint16_t niters = (uint16_t)(dim / 8);
+    for (uint16_t j = 0; j < niters; j++) {
+      // scope is a[8j:8j+7], b[8j:8j+7]
+      if (j+1 < niters) {
+        _mm_prefetch((char *)(a + 8 * (j + 1)), _MM_HINT_T0);
+        _mm_prefetch((char *)(b + 8 * (j + 1)), _MM_HINT_T0);
+      }
+      // load a_vec
+      __m256 a_vec = _mm256_load_ps(a + 8 * j);
+      // load b_vec
+      __m256 b_vec = _mm256_load_ps(b + 8 * j);
+      // a_vec - b_vec
+      _mm256_store_ps(residual + 8 * j, _mm256_sub_ps(a_vec, b_vec));
+    }
+  }
+
+  // build the lookup table given a query
+  void build_lookup_table(const T *query, const T *center,
+                          std::vector<std::vector<T>>& lookup_table) {
+    T residue[dim];
+    compute_residual(dim, query, center, residue);
+
+    // for each sub-vector space
+    #pragma omp parallel for
+    for (int i = 0; i < m; i++) {
+      // i-th sub-vector of the query
+      // auto q_i = query + i * sub_dim;
+      auto q_i = &residue[i * sub_dim];
+      // for each centroid
+      auto c_i = centroids[i];
+      for (int j = 0; j < nclusters; j++) {
+        // j-th centroid in i-th sub-space
+        auto c_ij = c_i + j * sub_dim;
         lookup_table[i][j] = compute_distance_squared(sub_dim, q_i, c_ij);
       }
     }
@@ -133,9 +196,20 @@ public:
   float quantized_distance(size_t vec_id) {
     float distance = 0;
     // for each sub-vector space
-    for (int i = 0; i < m; i++) {
-      auto cid = codebook[vec_id][i];
-      distance += lookup_table[i][cid];
+    for (int j = 0; j < m; j++) {
+      auto centroid = codebook[vec_id][j];
+      distance += lookup_table[j][centroid];
+    }
+    return distance;
+  }
+
+  float quantized_distance(size_t vec_id, 
+                           std::vector<std::vector<T>>& lookup_table) {
+    float distance = 0;
+    // for each sub-vector space
+    for (int j = 0; j < m; j++) {
+      auto centroid = codebook[vec_id][j];
+      distance += lookup_table[j][centroid];
     }
     return distance;
   }

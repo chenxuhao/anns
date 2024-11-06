@@ -1,5 +1,4 @@
 #include "utils.hpp"
-#include "distance.hpp"
 #include "quantizer.hpp"
 
 template <typename T>
@@ -17,21 +16,27 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   int nclusters = 256;
   Quantizer<T> quantizer(m, nclusters, dim, npoints, data_vectors);
 
-  //printf("Start search\n");
-  #pragma omp parallel for
-  for (int qid = 0; qid < qsize; ++qid) {
-    auto query = queries + dim * qid;
-    quantizer.build_lookup_table(query);
-    vector<pair<double, int>> distances;
-    for (size_t i = 0; i < npoints; ++i) {
-      auto dist = quantizer.quantized_distance(i);
-      distances.emplace_back(dist, i);
-    }
-    sort(distances.begin(), distances.end());
-    for (int i = 0; i < k; ++i) {
-      results[qid * k + i] = distances[i].second;
-    }
-  }
+  printf("Do search ...\n");
+  Timer t;
+  t.Start();
+
+  // one at a time
+  // #pragma omp parallel for
+  // for (int qid = 0; qid < qsize; ++qid) {
+    // auto query = queries + dim * qid;
+    // quantizer.search(query, data_vectors, k, &results[qid * k]);
+    // quantizer.faiss_search(query, k, &results[qid * k]);
+  // }
+
+  // many at a time
+  quantizer.faiss_search_batch(qsize, queries, k, results);
+  t.Stop();
+  
+  double runtime = t.Seconds();
+  auto throughput = double(qsize) / runtime;
+  auto latency = runtime / qsize * 1000.0;
+  printf("time = %f\n", runtime);
+  printf("avg latency: %f ms/query, throughput: %f queries/sec\n", latency, throughput);
 }
 
 template class ANNS<float>;

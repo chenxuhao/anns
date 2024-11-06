@@ -32,8 +32,13 @@ OPENBLAS_LIBS := -L$(OPENBLAS_HOME)/lib -lopenblas
 RAFT_LIBS := -L$(CONDA_HOME)/lib -lraft
 RAFT_INCS := -I$(CONDA_HOME)/include -I$(RAFT_HOME)/include
 PARLAY_INCS := ../ParlayANN/parlaylib
-INCLUDES := -I./include -I$(ANN_HOME)/include 
+INCLUDES := -I./include -I$(ANN_HOME)/include
 #INCLUDES += -I$(ANN_HOME)/include/efanna2e $(RAFT_INCS)
+
+# faiss
+INCLUDES += -I$(HOME)/proj/faiss -I$(HOME)/proj/amd-libm -I$(HOME)/proj/lapack-3.10.1
+LIBS += -L$(HOME)/proj/faiss/build/faiss -L$(HOME)/proj/amd-libm/lib -L$(HOME)/proj/lapack-3.10.1
+LIBS += -lfaiss -lalm -llapack -lrefblas -lgfortran
 
 ifeq ($(DEBUG), 1)
 	CXXFLAGS += -g -O0
@@ -51,7 +56,7 @@ endif
 ifeq ($(AVX2),1)
   CXXFLAGS += -mavx2
 else
-  #CXXFLAGS += -mno-avx
+#   CXXFLAGS += -mno-avx
 endif
 
 #INCLUDES += -I$(OPENBLAS_HOME)/include
