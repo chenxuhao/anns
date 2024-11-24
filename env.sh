@@ -1,7 +1,7 @@
 
 export OMP_NUM_THREADS=32
 
-export PROJ_HOME="/mnt/d/Research/Code/anns-main/bin"
+export PROJ_HOME=$HOME/proj
 
 echo $PROJ_HOME
 export CUDA_HOME=/usr/local/cuda

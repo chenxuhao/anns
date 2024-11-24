@@ -7,8 +7,8 @@ QSIZE=100
 DIM=128
 BIN=ivf_flat_cpu
 #BIN=ivf_flat_gpu
-BINDIR=/mnt/d/Research/Code/anns-main/bin
-DATADIR=/mnt/d/Research/Code/anns-main/data
+DATADIR=~/proj/anns/data
+BINDIR=~/proj/anns/bin
 
 echo "$BINDIR/$BIN $DATADIR/$DATASET/$DATASET\_base.fvecs 
       $DATADIR/$DATASET/$DATASET\_query.fvecs \

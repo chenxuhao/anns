@@ -24,7 +24,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
     
     for (size_t i = 0; i < npoints; ++ i) {
       auto *p_data = data_vectors + i * dim;
-      auto dist = compute_ip_distance(dim, p_data, q_data);
+      auto dist = compute_ip_distance(dim, p_data, q_data); // inner product
       S.push(i, dist);
     }
     // write the top-k elements into results
