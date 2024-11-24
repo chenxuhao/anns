@@ -11,8 +11,8 @@ DIM=200
 BIN=brute_force_cpu
 #BIN=brute_force_gpu
 
-BIN_PATH=/mnt/d/Research/Code/anns-main/bin
-DATA_PATH=/mnt/d/Research/Code/anns-main/data
+BIN_PATH=~/proj/anns/bin
+DATA_PATH=~/proj/anns/data
 OUTFILE=output.txt
 
 #DATASET=siftsmall
