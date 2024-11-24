@@ -50,7 +50,7 @@ class vector_dataset {
     T *operator[](size_t i) { return &dptr[i*dim]; }
     T* data() { return dptr; }
 
-    // fbin, ibin, u8bin
+    // read fbin, ibin, u8bin
     void load_vectors(const char *filename) {
       //std::cout << filename << " ";
       std::ifstream in(filename, std::ios::binary);
