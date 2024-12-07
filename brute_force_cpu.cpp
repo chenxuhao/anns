@@ -1,6 +1,10 @@
 #include "utils.hpp"
 #include "pqueue.hpp"
 #include "distance.hpp"
+<<<<<<< HEAD
+=======
+#include <iostream> 
+>>>>>>> a68acf06865f19420bb2b8f90ca3bf80c7212262
 
 template <typename T>
 void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
@@ -17,22 +21,25 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   t.Start();
   #pragma omp parallel for //schedule(dynamic,1)
   for (int qid = 0; qid < qsize; ++qid) {
-    const float *q_data = queries + qid * dim;
+    //std::cout << qsize;
+    const float *q_data = queries + qid * dim;  
     pqueue_t<vidType> S(k); // priority queue
+    
     for (size_t i = 0; i < npoints; ++ i) {
       auto *p_data = data_vectors + i * dim;
-      auto dist = compute_distance_squared(dim, p_data, q_data);
+      auto dist = compute_ip_distance(dim, p_data, q_data); // inner product
       S.push(i, dist);
     }
     // write the top-k elements into results
     for (int i = 0; i < k; ++ i)
       results[qid * k + i] = S[i];
   }
+
   t.Stop();
   double runtime = t.Seconds();
+  printf("runtime: %f sec\n", runtime);
   auto throughput = double(qsize) / runtime;
   auto latency = runtime / qsize * 1000.0;
-  printf("runtime: %f sec\n", runtime);
   printf("avg latency: %f ms/query, throughput: %f queries/sec\n", latency, throughput);
   std::cout << "average # distance computation: " << npoints << "\n";
 }

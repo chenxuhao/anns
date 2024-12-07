@@ -34,5 +34,5 @@ int main(int argc, char *argv[]) {
   const char *path_out = argv[7]; // output file path
   const char *path_idx = argv[8]; // index file path
   ANNS<float> anns(k, qsize, vecdim, dsize, path_q, path_d, path_gt, path_out, path_idx);
+  ;
 }
-

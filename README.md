@@ -8,9 +8,15 @@ Edit `env.sh` to let the libraries pointing to the right paths in your system, a
 
     $ source env.sh
 
+<<<<<<< HEAD
 Unpack the `siftsmall` dataset:
 
     $ cd data; tar zxvf siftsmall.tar.gz
+=======
+To prepare yandex text-to-image dataset:
+
+    $ bash prepare_data.sh t2i-10M
+>>>>>>> a68acf06865f19420bb2b8f90ca3bf80c7212262
 
 Now build the program:
 

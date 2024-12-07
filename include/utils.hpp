@@ -16,6 +16,7 @@
 #include <sys/resource.h>
 
 #include "timer.hpp"
+#include "distance.hpp"
 
 struct QueryParams{
   long k;
@@ -49,7 +50,7 @@ class vector_dataset {
     T *operator[](size_t i) { return &dptr[i*dim]; }
     T* data() { return dptr; }
 
-    // fbin, ibin, u8bin
+    // read fbin, ibin, u8bin
     void load_vectors(const char *filename) {
       //std::cout << filename << " ";
       std::ifstream in(filename, std::ios::binary);
@@ -58,31 +59,23 @@ class vector_dataset {
         exit(EXIT_FAILURE);
       }
 
+      in.read((char*)&num, 4);
       in.read((char*)&dim, 4);
-      in.seekg(0, std::ios::end);
-      std::ios::pos_type ss = in.tellg();
-      size_t fsize = (size_t)ss;
-      num = size_t(fsize / (dim + 1) / 4);
 
-      //size_t nvecs = 0;
-      //in.read((char*)&nvecs, 4);
-      //if (num == 0) num = nvecs;
-
-      //std::cout << " n = " << num << " dim = " << dim << " \t";
+      std::cout << " n = " << num << " dim = " << dim << " \t";
 
       if ((dim*sizeof(T)) % 32 == 0) {
       //if (0) {
-        //std::cout << " aligned\n";
+        std::cout << " aligned\n";
         dptr = (T*)aligned_alloc(32, num*dim*sizeof(T));
       } else {
-        //std::cout << " unaligned\n";
+        std::cout << " unaligned\n";
         dptr = (T*)malloc(num*dim*sizeof(T));
       }
 
-      in.seekg(0, std::ios::beg);
+      in.seekg(8, std::ios::beg);
       for (size_t i = 0; i < num; i++) {
-        in.seekg(4, std::ios::cur);
-        in.read((char*)(dptr + i * dim), dim * 4);
+        in.read((char*)(dptr + i * dim), dim * sizeof(T));
       }
       //for (size_t i = 0; i < num; i++) in.read((char*)(dptr+i*dim), sizeof(T)*dim);
       in.close();
@@ -132,7 +125,7 @@ public:
         auto true_id = gt[q_i][top_i];
         for (int n_i = 0; n_i < K; ++n_i) {
           if (results[q_i][n_i] == true_id) {
-            correct ++;
+            correct++;
             break;
           }
         }

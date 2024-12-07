@@ -21,4 +21,7 @@ $BIN_PATH/$BIN $DATA_PATH/$DATASET/$DATASET\_base.fvecs \
                $DATA_PATH/$DATASET/$DATASET\_query.fvecs \
                $DATA_PATH/$DATASET/$DATASET\_groundtruth.ivecs \
                $NP $DIM $NQ $OUTFILE
+<<<<<<< HEAD
 
+=======
+>>>>>>> a68acf06865f19420bb2b8f90ca3bf80c7212262

@@ -30,7 +30,7 @@ inline int compute_ip_distance(int dim, const unsigned char* __restrict__ a, con
 inline float compute_ip_distance(int dim, const float* __restrict__ a, const float* __restrict__ b) {
   float ans = 0.;
   #pragma omp simd
-  for(int i = 0;i < dim; ++ i)
+  for(int i = 0; i < dim; ++i)
     ans += a[i] * b[i];
   return -ans;
 }

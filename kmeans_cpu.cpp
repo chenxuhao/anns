@@ -1,4 +1,5 @@
 #include <float.h>
+#include <cstdint>
 #include "kmeans.hpp"
 #include "utils.hpp"
 #include "distance.hpp"
