@@ -35,6 +35,7 @@ bin/*
 !bin/*.sh
 
 # Data\
+
 data/*
 !data/*.sh
 src/*.txt

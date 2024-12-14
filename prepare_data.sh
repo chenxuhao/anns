@@ -41,12 +41,12 @@ elif [ "$1" == "laion-10M" ]; then
         fi
     done
 
-    for i in 0 1 2 3 4 5 6 7 9 10
-    do
-        if [ ! -e ./data/$1/text_emb_${i}.npy ]; then
-            wget -t 0 https://the-eye.eu/public/AI/cah/laion400m-met-release/laion400m-embeddings/texts/text_emb_${i}.npy -P data/$1
-        fi
-    done
+    #for i in 0 1 2 3 4 5 6 7 9 10
+    #do
+        #if [ ! -e ./data/$1/text_emb_${i}.npy ]; then
+            #wget -t 0 https://the-eye.eu/public/AI/cah/laion400m-met-release/laion400m-embeddings/texts/text_emb_${i}.npy -P data/$1
+        #fi
+    #done
 
     # export text and img simultaneously, watch out the DRAM.
     python3 laion_converter.py
