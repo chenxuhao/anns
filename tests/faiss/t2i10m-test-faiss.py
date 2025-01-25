@@ -43,8 +43,8 @@ def load_vectors_fbin(filename, dim):
 
 if __name__ == "__main__":
 
-  base_num, base_data = load_vectors_fbin(f"/home/x-ychoi7/newproj/anns/ann_data/t2i-10M/base.10M.fbin", 200)
-  query_num, query_data = load_vectors_fbin(f"/home/x-ychoi7/newproj/anns/ann_data/t2i-10M/query.10k.fbin", 200)
+  base_num, base_data = load_vectors_fbin(f"/work2/10442/ychoi7/stampede3/data/t2i-10M/base.10M.fbin", 200)
+  query_num, query_data = load_vectors_fbin(f"/work2/10442/ychoi7/stampede3/data/t2i-10M/query.10k.fbin", 200)
   
   faiss.omp_set_num_threads(128)
   
