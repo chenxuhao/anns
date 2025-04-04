@@ -72,3 +72,27 @@ inline float compute_distance_squared(int dim, const float* __restrict__ a, cons
   return _mm256_reduce_add_ps(sum);
 }
 
+inline float compute_ip_distance_simd(int dim, const float* __restrict__ a, const float* __restrict__ b) {
+    a = (const float *)__builtin_assume_aligned(a, 32);
+    b = (const float *)__builtin_assume_aligned(b, 32);
+
+    // assume size is divisible by 8
+    uint16_t niters = (uint16_t)(dim / 8);
+    __m256 sum = _mm256_setzero_ps();
+    
+    for (uint16_t j = 0; j < niters; j++) {
+        // prefetch next iteration's data
+        if (j+1 < niters) {
+            _mm_prefetch((char *)(a + 8 * (j + 1)), _MM_HINT_T0);
+            _mm_prefetch((char *)(b + 8 * (j + 1)), _MM_HINT_T0);
+        }
+        // load 8 floats from each vector
+        __m256 a_vec = _mm256_load_ps(a + 8 * j);
+        __m256 b_vec = _mm256_load_ps(b + 8 * j);
+        // multiply and add to accumulator
+        sum = _mm256_fmadd_ps(a_vec, b_vec, sum);
+    }
+    // horizontal add and negate (following the convention of other ip_distance functions)
+    return -_mm256_reduce_add_ps(sum);
+}
+

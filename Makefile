@@ -34,7 +34,7 @@ graph_search_gpu: $(INCS) $(OBJS) bfs_gpu.o
 	mv $@ $(BIN)
 
 parlayann_cpu: $(INCS) $(OBJS) beam_search.o 
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) beam_search.o -o $@ $(LIBS) -I$(PARLAY_INCS)/include
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) beam_search.o -o $@ $(LIBS)
 	mv $@ $(BIN)
 
 quantized_search_cpu: $(INCS) $(OBJS) quantized_search_cpu.o kmeans_cpu.o
