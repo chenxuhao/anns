@@ -95,4 +95,3 @@ inline float compute_ip_distance_simd(int dim, const float* __restrict__ a, cons
     // horizontal add and negate (following the convention of other ip_distance functions)
     return -_mm256_reduce_add_ps(sum);
 }
-
