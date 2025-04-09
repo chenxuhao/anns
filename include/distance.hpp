@@ -95,3 +95,34 @@ inline float compute_ip_distance_simd(int dim, const float* __restrict__ a, cons
     // horizontal add and negate (following the convention of other ip_distance functions)
     return -_mm256_reduce_add_ps(sum);
 }
+
+int32_t compute_ip_distance_int8(const uint8_t* x, const int8_t* y) {
+    __m256i sum = _mm256_setzero_si256();
+
+    for (int i = 0; i < 256; i += 32) {
+        // Load 32 bytes (256 bits)
+        __m256i vx = _mm256_cvtepu8_epi16(_mm_loadu_si128((__m128i const*)(x + i)));  // x: uint8 -> int16
+        __m256i vy = _mm256_cvtepi8_epi16(_mm_loadu_si128((__m128i const*)(y + i)));  // y: int8 -> int16
+
+        // Multiply: int16 * int16 = int16
+        __m256i product = _mm256_mullo_epi16(vx, vy);
+
+        // Widen to 32 bits and accumulate
+        __m128i low = _mm256_extracti128_si256(product, 0);
+        __m128i high = _mm256_extracti128_si256(product, 1);
+        __m256i wide = _mm256_cvtepi16_epi32(low);
+        sum = _mm256_add_epi32(sum, wide);
+        wide = _mm256_cvtepi16_epi32(high);
+        sum = _mm256_add_epi32(sum, wide);
+    }
+
+    // Horizontal sum of 8 int32 elements
+    int32_t result[8];
+    _mm256_storeu_si256((__m256i*)result, sum);
+    int32_t total = 0;
+    for (int i = 0; i < 8; ++i) {
+        total += result[i];
+    }
+
+    return -total; 
+}
