@@ -5,8 +5,8 @@ INCS=include/pqueue.hpp
 CUINCS=include/pqueue.cuh
 BIN=./bin/
 
-all: brute_force_cpu quantized_search_cpu ivf_flat_cpu
-g-ann: graph_search_cpu parlayann_cpu
+all: brute_force_cpu quantized_search_cpu ivf_flat_cpu graph_search_cpu parlayann_cpu
+#g-ann: graph_search_cpu parlayann_cpu
 ann-gpu: brute_force_gpu graph_search_gpu ivf_flat_gpu
 
 brute_force_cpu: $(INCS) $(OBJS) brute_force_cpu.o
@@ -34,7 +34,7 @@ graph_search_gpu: $(INCS) $(OBJS) bfs_gpu.o
 	mv $@ $(BIN)
 
 parlayann_cpu: $(INCS) $(OBJS) beam_search.o 
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) beam_search.o -o $@ $(LIBS)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) beam_search.o -o $@ $(LIBS) -I$(PARLAY_INCS)/include
 	mv $@ $(BIN)
 
 quantized_search_cpu: $(INCS) $(OBJS) quantized_search_cpu.o kmeans_cpu.o
