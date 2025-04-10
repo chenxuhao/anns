@@ -7,17 +7,16 @@
 #include "prefetch.hpp"
 
 class Tensor {
+    int32_t nbits = 0; // number of bits/value
+    int32_t dim = 0; // dimension of each vector
+    int32_t num_vectors = 0; // number of vectors
+    int32_t csize = 0; // number of bytes/vector
+    int32_t align_width = 0; // padding for alignment
+    int32_t dalign = 0; // actual alignment 
+    char * codes = nullptr; // array of quantized data
     public:
-        int32_t nbits = 0; // number of bits/value
-        int32_t dim = 0; // dimension of each vector
-        int32_t num_vectors = 0; // number of vectors
-        int32_t csize = 0; // number of bytes/vector
-        int32_t align_width = 0; // padding for alignment
-        int32_t dalign = 0; // actual alignment 
-        char * codes = nullptr; // array of quantized data
-
         Tensor(int32_t dim, int32_t nbits, int32_t align_width) : 
-            dim(dim), nbits(nbits), align_width(align_width) {
+        nbits(nbits), dim(dim), align_width(align_width) {
                 dalign = ((dim + align_width - 1) / align_width * align_width); // make dalign a nearest multiple of align_width
                 csize = nbits / 8 * dalign;
             }
@@ -28,9 +27,8 @@ class Tensor {
 
     void init(int32_t n) {
         num_vectors = n;
-
+        
         /*More aggressive alignment*/
-
         codes = (char *)aligned_alloc(dalign, (int64_t) csize * num_vectors);
          
         /*
@@ -42,12 +40,12 @@ class Tensor {
         } else {
             codes = (char *)malloc((int64_t)csize * num_vectors);
         }
-        */    
+        */   
 
     }
 
     char * get_code_at(int32_t u) {
-        return codes + (int64_t)(u * csize);
+        return codes + static_cast<int64_t>(u) * csize;
     }
 
     char * get_full_codes() {

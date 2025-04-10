@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include <cmath>
-#include "utils.hpp" 
+#include "pyanns_utils.hpp" 
 
 class Multiplier {
     protected:
@@ -29,15 +29,12 @@ class AffineCalibrator : public Multiplier {
             auto [max, min_val] = find_minmax(data, num_items, drop_ratio);
             this->min = min_val;
             this->dif = max - this->min;
-            std::cout << "AffineCalibrator: min = " << this->min 
-                    << ", max = " << max 
-                    << ", dif = " << this->dif << "\n";
         }
 
         int32_t transform(float x) {
             float result = (x - min) / dif;
             result = limit_range(result);
-            return static_cast<int32_t>(std::round(apply(result)));
+            return std::round(apply(result));
         }
 
         float revert(float x) {
@@ -53,19 +50,18 @@ class SymCalibrator : public Multiplier {
         SymCalibrator(float multiplier) 
             : Multiplier(multiplier), max(0.0f) {}
 
-        void calibrate(const float* data, int num_items, float drop_ratio = 0.0f) {
+        void calibrate(const float* data, int32_t num_items, float drop_ratio = 0.0f) {
             if (drop_ratio > 0) {
                 this->max = find_absmax(data, num_items, drop_ratio);
             } else {
                 this->max = find_absmax_without_drop(data, num_items);
             }
-            std::cout << "SymCalibrator, max = " << this->max << "\n";
         }
 
-        int transform(float x) {
+        int32_t transform(float x) {
             float result = x / max;
             result = limit_range_sym(result);
-            return static_cast<int>(std::round(apply(result)));
+            return std::round(apply(result));
         }
 
         float revert(float x) {

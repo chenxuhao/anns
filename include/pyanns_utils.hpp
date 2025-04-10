@@ -22,8 +22,8 @@ inline float limit_range_sym(float x) {
     return x;
 }
 
-std::pair<float, float> find_minmax(const float* data, int num_items, float ratio = 0.0f) {
-    int top = static_cast<int>(num_items * ratio) + 1;
+std::pair<float, float> find_minmax(const float* data, int32_t num_items, float ratio = 0.0f) {
+    size_t top = int64_t(num_items * ratio) + 1;
 
     std::priority_queue<float, std::vector<float>, std::greater<float>> max_heap;
     std::priority_queue<float, std::vector<float>, std::greater<float>> min_heap;
@@ -49,8 +49,8 @@ std::pair<float, float> find_minmax(const float* data, int num_items, float rati
     return std::make_pair(max_heap.top(), -min_heap.top());
 }
 
-float find_absmax(const float* data, int num_items, float ratio = 0.0f) {
-    int top = static_cast<int>(num_items * ratio) + 1;
+float find_absmax(const float* data, int32_t num_items, float ratio = 0.0f) {
+    size_t top = int64_t(num_items * ratio) + 1;
 
     std::priority_queue<float, std::vector<float>, std::greater<float>> heap;
 
@@ -67,7 +67,7 @@ float find_absmax(const float* data, int num_items, float ratio = 0.0f) {
     return heap.top();
 }
 
-float find_absmax_without_drop(const float* data, int num_items) {
+float find_absmax_without_drop(const float* data, int32_t num_items) {
     float result = 0.0f;
     for (int i = 0; i < num_items; ++i) {
         result = std::max(result, std::abs(data[i]));
