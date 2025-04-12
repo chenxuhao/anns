@@ -188,8 +188,8 @@ beam_search_quantized(Graph<indexType> &G, std::vector<indexType> starting_point
     uint8_t *p_data = (uint8_t *)quantizer_data.get_quantized_at(p); 
     int8_t * q_data = quantizer_query.get_quantized_query(); 
 
-    auto dist = compute_ip_distance_int8(dim, p_data, q_data); 
-
+    //auto dist = compute_ip_distance_int8(dim, p_data, q_data); 
+    auto dist = dota_u8_s8_256(p_data, q_data); 
     frontier.push_back(std::pair<indexType, distanceType>(p, dist));
   }
   std::sort(frontier.begin(), frontier.end(), less);
@@ -260,8 +260,8 @@ beam_search_quantized(Graph<indexType> &G, std::vector<indexType> starting_point
       uint8_t *p_data = (uint8_t *)quantizer_data.get_quantized_at(a); 
       int8_t * q_data = quantizer_query.get_quantized_query(); 
 
-      auto dist = compute_ip_distance_int8(dim, p_data, q_data); 
-
+      //auto dist = compute_ip_distance_int8(dim, p_data, q_data); 
+      auto dist = dota_u8_s8_256(p_data, q_data); 
       dist_cmps++;
       // skip if frontier not full and distance too large
       if (dist >= cutoff) continue;
@@ -518,8 +518,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
     
     const float *query_data = queries + query_id * dim;
     
-    /*
-    // Use optimized prefetch settings
+    // PREFETCH QUAANTIZED DATA BEFORE SEARCH (OPTIONAL)
     if (po > 0 && pl > 0) {
       for (int i = 0; i < k; i++) {
         // Prefetch po vector blocks
@@ -533,7 +532,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
         }
       } 
     }
-      */
+
 
     SQ8UQuantizer quantizer_query(Metric::IP, dim, 1, true);
     quantizer_query.train(query_data);
