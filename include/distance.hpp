@@ -101,6 +101,7 @@ inline float compute_ip_distance_simd(int dim, const float* __restrict__ a, cons
 #include <cstdint>
 #include <cassert>
 
+// Using AVX256
 inline int32_t compute_ip_distance_int8(int32_t dim, const uint8_t* __restrict__ x, const int8_t* __restrict__ y) {
     // Assume pointers are 32-byte aligned.
     x = (const uint8_t *)__builtin_assume_aligned(x, 32);
@@ -165,4 +166,25 @@ inline int32_t compute_ip_distance_int8(int32_t dim, const uint8_t* __restrict__
 
     // Return the negative of the dot product (following your convention)
     return -total;
+}
+
+// Using AVX512
+inline int32_t
+dota_u8_s8_256(const uint8_t* x, const int8_t* y) {
+    __m512i sum0 = _mm512_setzero_si512();
+    __m512i sum1 = _mm512_setzero_si512();
+    auto xx0 = _mm512_load_si512(x);
+    auto xx1 = _mm512_load_si512(x + 64);
+    auto xx2 = _mm512_load_si512(x + 128);
+    auto xx3 = _mm512_load_si512(x + 192);
+    auto yy0 = _mm512_load_si512(y);
+    auto yy1 = _mm512_load_si512(y + 64);
+    auto yy2 = _mm512_load_si512(y + 128);
+    auto yy3 = _mm512_load_si512(y + 192);
+    asm("vpdpbusd %1, %2, %0" : "+x"(sum0) : "mx"(xx0), "x"(yy0));
+    asm("vpdpbusd %1, %2, %0" : "+x"(sum1) : "mx"(xx1), "x"(yy1));
+    asm("vpdpbusd %1, %2, %0" : "+x"(sum0) : "mx"(xx2), "x"(yy2));
+    asm("vpdpbusd %1, %2, %0" : "+x"(sum1) : "mx"(xx3), "x"(yy3));
+    sum0 = _mm512_add_epi32(sum0, sum1);
+    return -_mm512_reduce_add_epi32(sum0);
 }
