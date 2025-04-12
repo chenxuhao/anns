@@ -189,7 +189,7 @@ beam_search_quantized(Graph<indexType> &G, std::vector<indexType> starting_point
     int8_t * q_data = quantizer_query.get_quantized_query(); 
 
     //auto dist = compute_ip_distance_int8(dim, p_data, q_data); 
-    auto dist = dota_u8_s8_256(p_data, q_data); 
+    auto dist = compute_ip_distance_int8_avx512(dim, p_data, q_data); 
     frontier.push_back(std::pair<indexType, distanceType>(p, dist));
   }
   std::sort(frontier.begin(), frontier.end(), less);
@@ -261,7 +261,7 @@ beam_search_quantized(Graph<indexType> &G, std::vector<indexType> starting_point
       int8_t * q_data = quantizer_query.get_quantized_query(); 
 
       //auto dist = compute_ip_distance_int8(dim, p_data, q_data); 
-      auto dist = dota_u8_s8_256(p_data, q_data); 
+      auto dist = compute_ip_distance_int8_avx512(dim, p_data, q_data); 
       dist_cmps++;
       // skip if frontier not full and distance too large
       if (dist >= cutoff) continue;
