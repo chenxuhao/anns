@@ -37,6 +37,10 @@ parlayann_cpu: $(INCS) $(OBJS) beam_search.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) beam_search.o -o $@ $(LIBS) -I$(PARLAY_INCS)/include
 	mv $@ $(BIN)
 
+quant_parlayann_cpu: $(INCS) $(OBJS) beam_search_quantized.o 
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) beam_search_quantized.o -o $@ $(LIBS) -I$(PARLAY_INCS)/include
+	mv $@ $(BIN)
+
 quantized_search_cpu: $(INCS) $(OBJS) quantized_search_cpu.o kmeans_cpu.o
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) quantized_search_cpu.o kmeans_cpu.o -o $@ $(LIBS)
 	mv $@ $(BIN)
