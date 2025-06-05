@@ -1,5 +1,6 @@
 #include <vector>
 #include <cassert>
+#include <cstdint>
 
 template <typename T>
 class Kmeans {
