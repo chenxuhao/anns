@@ -41,6 +41,16 @@ To run the ParlayANN implementation:
     $ cd bin/
     $ ./test_parlayann.sh
 
+To run the Faiss implementations:
+    $ conda create -n faiss_env python=3.10 cuda-version=12.2
+    $ conda activate faiss_env
+    $ conda install -c pytorch -c nvidia -c rapidsai -c conda-forge faiss-gpu-cuvs=1.11.0 
+    $ make faiss_build_index
+    $ ./bin/faiss_build_index $PATH/sift/sift_base.fvecs sift_ivf_flat.index 1024
+    $ make faiss_ivf_cpu
+    $ ./bin/faiss_ivf_cpu sift_ivf_flat.index $PATH/sift/sift_query.fvecs $PATH/sift/sift_groundtruth.ivecs 10
+
+
 ## References
 
 [Billion-Scale Similarity Search with GPUs](https://arxiv.org/abs/1702.08734) [BigData] [Code](https://github.com/facebookresearch/faiss)

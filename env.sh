@@ -14,3 +14,5 @@ export OPENBLAS_HOME=$PROJ_HOME/openblas
 export ANN_HOME=$PROJ_HOME/anns
 export ANN_DATASET_PATH=$PROJ_HOME/anns/data
 
+export CONDA_PREFIX=~/anaconda3
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
