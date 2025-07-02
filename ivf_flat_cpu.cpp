@@ -2,6 +2,7 @@
 #include "kmeans.hpp"
 #include "pqueue.hpp"
 #include "distance.hpp"
+typedef int idx_t;
 
 template <typename T>
 void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
@@ -41,7 +42,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
       top_centers.push(cid, c_dist[cid]);
     }
     // search inside each of the top clusters
-    pqueue_t<vidType> S(K);
+    pqueue_t<idx_t> S(K);
     for (int i = 0; i < num_top_clusters; ++ i) {
       int cid = top_centers[i];
       for (auto vid : clusters[cid]) {

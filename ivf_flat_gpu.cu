@@ -1,15 +1,14 @@
 #include <cub/cub.cuh>
-
 #include "utils.hpp"
-#include "common.hpp"
 #include "kmeans.hpp"
-#include "cutil_subset.cuh"
-#include "cuda_profiler_api.h"
-#include "cuda_launch_config.cuh"
+#include "utils.cuh"
+#include <cfloat>
 
 #define MP 2
 #define MAX_NUM_CLUSTERS 256
 #define MC (MAX_NUM_CLUSTERS/BLOCK_SIZE)
+
+typedef int vidType;
 
 __global__ void //__launch_bounds__(BLOCK_SIZE, 8)
 IVFsearch(int K, int qsize, int dim, size_t npoints,
@@ -66,7 +65,7 @@ IVFsearch(int K, int qsize, int dim, size_t npoints,
     // each warp takes one centroid
     for (size_t cid = warp_lane; cid < nclusters; cid += WARPS_PER_BLOCK) {
       auto *c_data = centroids + cid * dim;
-      auto dist = cutils::compute_distance(dim, q_data, c_data);
+      auto dist = compute_distance(dim, q_data, c_data);
       if (thread_lane == 0) c_dists[cid] = dist;
     }
     if (thread_lane == 0) count_dc[warp_lane] += nclusters;
@@ -103,7 +102,7 @@ IVFsearch(int K, int qsize, int dim, size_t npoints,
       auto pid = cluster_0[id];
       assert(pid < npoints);
       auto *p_data = data_vectors + pid * dim;
-      auto dist = cutils::compute_distance(dim, p_data, q_data);
+      auto dist = compute_distance(dim, p_data, q_data);
       if (thread_lane == 0) {
         count_dc[warp_lane] += 1;
         distances[id] = dist;
@@ -138,7 +137,7 @@ IVFsearch(int K, int qsize, int dim, size_t npoints,
             auto pid = cluster_0[id];
             assert(pid < npoints);
             auto *p_data = data_vectors + pid * dim;
-            auto dist = cutils::compute_distance(dim, p_data, q_data);
+            auto dist = compute_distance(dim, p_data, q_data);
             if (thread_lane == 0) {
               count_dc[warp_lane] += 1;
               distances[warp_lane+K+j*WARPS_PER_BLOCK] = dist;
@@ -176,7 +175,7 @@ IVFsearch(int K, int qsize, int dim, size_t npoints,
             auto pid = cluster_i[id];
             assert(pid < npoints);
             auto *p_data = data_vectors + pid * dim;
-            auto dist = cutils::compute_distance(dim, p_data, q_data);
+            auto dist = compute_distance(dim, p_data, q_data);
             if (thread_lane == 0) {
               count_dc[warp_lane] += 1;
               distances[warp_lane+K+j*WARPS_PER_BLOCK] = dist;
@@ -222,8 +221,6 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
                      int *results, const char *index_file) {
   assert(npoints >= 10000);
   assert(K+WARPS_PER_BLOCK <= MP*BLOCK_SIZE);
-  size_t memsize = cutils::print_device_info(0);
-
   // clustering the data points
   int nclusters = std::sqrt(npoints);
   nclusters = std::min(nclusters, MAX_NUM_CLUSTERS);
@@ -231,45 +228,6 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   Kmeans<T> kmeans(npoints, dim, nclusters, data_vectors);
   auto centroids = kmeans.cluster_gpu();
   auto clusters = kmeans.get_clusters();
-/*
-  int num_top_clusters = nclusters / 10;
-  if (num_top_clusters < 1) num_top_clusters = 1;
-  uint64_t total_count_dc = 0;
-
-  Timer t;
-  t.Start();
-  #pragma omp parallel for schedule(dynamic,1) reduction(+:total_count_dc)
-  for (int qid = 0; qid < qsize; ++qid) {
-    uint64_t count_dc = 0;
-    auto q_data = queries + qid * dim;
-    std::vector<float> c_dist(nclusters);
-    // find the top clusters
-    for (int cid = 0; cid < nclusters; ++ cid)
-      c_dist[cid] = distance(dim, q_data, &centroids[cid * dim]);
-    count_dc += nclusters;
-    pqueue_t<int> top_centers(num_top_clusters); // priority queue
-    for (int cid = 0; cid < nclusters; ++ cid) {
-      top_centers.push(cid, c_dist[cid]);
-    }
-    // search inside each of the top clusters
-    pqueue_t<vidType> S(K);
-    for (int i = 0; i < num_top_clusters; ++ i) {
-      int cid = top_centers[i];
-      for (auto vid : clusters[cid]) {
-        auto dist = distance(dim, q_data, &data_vectors[vid * dim]);
-        count_dc ++;
-        S.push(vid, dist);
-      }
-    }
-    // write the top-K nodes into results
-    for (int i = 0; i < K; ++ i) {
-      results[qid * K + i] = S[i];
-    }
-    total_count_dc += count_dc;
-  }
-  t.Stop();
-  //*/
-///*
   // count the maximum cluster size
   int cidx = 0;
   int max_cluster_size = 0;
@@ -286,12 +244,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
 
   // GPU lauch configuration
   size_t num_threads = BLOCK_SIZE;
-  int max_blocks_per_SM = maximum_residency(IVFsearch, num_threads, 0);
-  std::cout << "max_blocks_per_SM = " << max_blocks_per_SM << "\n";
-  cudaDeviceProp deviceProp;
-  CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
-  size_t num_blocks = max_blocks_per_SM * deviceProp.multiProcessorCount;
-  assert(num_blocks < 65536);
+  size_t num_blocks = (qsize - 1) / num_threads + 1;
   std::cout << "num_blocks = " << num_blocks << " num_threads = " << num_threads << "\n";
 
   // allocate device memory

@@ -1,6 +1,7 @@
 #include "utils.hpp"
 #include "pqueue.hpp"
 #include "distance.hpp"
+typedef int idx_t;
 
 template <typename T>
 void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
@@ -18,7 +19,7 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
   #pragma omp parallel for //schedule(dynamic,1)
   for (int qid = 0; qid < qsize; ++qid) {
     const float *q_data = queries + qid * dim;
-    pqueue_t<vidType> S(k); // priority queue
+    pqueue_t<idx_t> S(k); // priority queue
     for (size_t i = 0; i < npoints; ++ i) {
       auto *p_data = data_vectors + i * dim;
       auto dist = compute_distance_squared(dim, p_data, q_data);

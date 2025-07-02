@@ -2,7 +2,7 @@
 #include <float.h>
 #include "kmeans.hpp"
 #include "kmeans_kernel.cuh"
-#include "cutil_subset.cuh"
+#include "utils.cuh"
 
 template <typename T>
 T* Kmeans<T>::cluster_gpu() {

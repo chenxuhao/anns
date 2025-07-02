@@ -5,9 +5,8 @@ INCS=include/pqueue.hpp
 CUINCS=include/pqueue.cuh
 BIN=./bin/
 
-all: brute_force_cpu quantized_search_cpu ivf_flat_cpu
-g-ann: graph_search_cpu parlayann_cpu
-ann-gpu: brute_force_gpu graph_search_gpu ivf_flat_gpu
+all: brute_force_cpu quantized_search_cpu ivf_flat_cpu parlayann_cpu
+ann-gpu: brute_force_gpu ivf_flat_gpu
 
 faiss_build_index:
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -I$(CONDA_PREFIX)/include -L$(CONDA_PREFIX)/lib faiss_build_index.cpp -o $@ -lfaiss

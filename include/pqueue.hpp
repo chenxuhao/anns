@@ -3,7 +3,7 @@
 #include <vector>
 #include <stdint.h>
 #include <string.h>
-#include "common.hpp"
+#include <cfloat>
 
 template <typename T>
 class pqueue_t {
@@ -23,8 +23,6 @@ public:
     next_idx = 0;
     queue_size = 0;
     queue_capacity = L;
-    //vid_queue = new T[queue_capacity];
-    //distances = new float[queue_capacity];
     vid_queue.resize(2*L);
     distances.resize(2*L);
     expanded.resize(2*L);
@@ -33,12 +31,6 @@ public:
     expanded2.resize(2*L);
     std::fill(expanded.begin(), expanded.end(), 0);
   }
-	/*
-  ~pqueue_t() {
-    delete [] vid_queue;
-    delete [] distances;
-  }
-	*/
   T& operator[](size_t i) { return vid_queue[i]; }
   const T& operator[](size_t i) const { return vid_queue[i]; }
   int get_capacity() const { return queue_capacity; }

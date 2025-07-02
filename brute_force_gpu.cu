@@ -1,12 +1,10 @@
 #include <cub/cub.cuh>
-
 #include "utils.hpp"
-#include "common.hpp"
-#include "cutil_subset.cuh"
-#include "cuda_profiler_api.h"
-#include "cuda_launch_config.cuh"
+#include "utils.cuh"
+#include <cfloat>
 
 #define M 2
+typedef int idx_t;
 
 __global__ void //__launch_bounds__(BLOCK_SIZE, 8)
 BruteForceSearch(int K, int qsize, int dim, size_t npoints,
@@ -21,12 +19,12 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
   int warp_lane   = threadIdx.x / WARP_SIZE;     // warp index within the CTA
 
   __shared__ uint64_t count_dc[WARPS_PER_BLOCK];
-  __shared__ vidType candidates[BLOCK_SIZE*M];
+  __shared__ idx_t candidates[BLOCK_SIZE*M];
   __shared__ float distances[BLOCK_SIZE*M];
   if (thread_lane == 0) count_dc[warp_lane] = 0;
  
   // for sorting
-  typedef cub::BlockRadixSort<float, BLOCK_SIZE, M, vidType> BlockRadixSort;
+  typedef cub::BlockRadixSort<float, BLOCK_SIZE, M, idx_t> BlockRadixSort;
   __shared__ typename BlockRadixSort::TempStorage temp_storage;
 
   int ROUNDS = (BLOCK_SIZE*M - K) / WARPS_PER_BLOCK;
@@ -42,7 +40,7 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
     // insert the first K points
     for (size_t pid = warp_lane; pid < K; pid += WARPS_PER_BLOCK) {
       auto *p_data = data_vectors + pid * dim;
-      auto dist = cutils::compute_distance(dim, p_data, q_data);
+      auto dist = compute_distance(dim, p_data, q_data);
       if (thread_lane == 0) {
         count_dc[warp_lane] += 1;
         distances[pid] = dist;
@@ -51,7 +49,7 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
     __syncthreads();
     // sort the queue by distance
     float thread_key[M];
-    vidType thread_val[M];
+    idx_t thread_val[M];
     // each warp compares one point in the database
     auto NUM = (npoints-K-1) / NTASKS + 1;
     for (size_t i = 0; i < NUM; i += 1) {
@@ -61,7 +59,7 @@ BruteForceSearch(int K, int qsize, int dim, size_t npoints,
         auto pid = K + warp_lane + i * NTASKS + j * WARPS_PER_BLOCK;
         if (pid < npoints) {
           auto *p_data = data_vectors + pid * dim;
-          auto dist = cutils::compute_distance(dim, p_data, q_data);
+          auto dist = compute_distance(dim, p_data, q_data);
           if (thread_lane == 0) {
             count_dc[warp_lane] += 1;
             distances[warp_lane+K+j*WARPS_PER_BLOCK] = dist;
@@ -95,16 +93,8 @@ void ANNS<T>::search(int k, int qsize, int dim, size_t npoints,
                      const T* queries, const T* data_vectors,
                      int *results, const char *index_file) {
   assert(K+WARPS_PER_BLOCK <= M*BLOCK_SIZE);
-  size_t memsize = cutils::print_device_info(0);
-
-  // GPU lauch configuration
   size_t num_threads = BLOCK_SIZE;
-  int max_blocks_per_SM = maximum_residency(BruteForceSearch, num_threads, 0);
-  std::cout << "max_blocks_per_SM = " << max_blocks_per_SM << "\n";
-  cudaDeviceProp deviceProp;
-  CUDA_SAFE_CALL(cudaGetDeviceProperties(&deviceProp, 0));
-  size_t num_blocks = max_blocks_per_SM * deviceProp.multiProcessorCount;
-  assert(num_blocks < 65536);
+  size_t num_blocks = (qsize - 1) / num_threads + 1;
   std::cout << "num_blocks = " << num_blocks << " num_threads = " << num_threads << "\n";
 
   // allocate device memory

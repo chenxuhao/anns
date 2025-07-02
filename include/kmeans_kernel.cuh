@@ -1,7 +1,6 @@
 #include <cub/cub.cuh>
 #include <cub/block/block_reduce.cuh>
-#include "common.hpp"
-
+#include "utils.cuh"
 #define THREADS_PER_DIM 16
 #define BLOCKS_PER_DIM 16
 #define THREADS_PER_BLOCK THREADS_PER_DIM*THREADS_PER_DIM

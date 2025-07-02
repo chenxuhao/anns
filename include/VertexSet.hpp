@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <sys/mman.h>
 
 #include <limits>
@@ -16,8 +17,7 @@
 #include <iterator>
 #include <algorithm>
 
-#include "common.hpp"
-
+typedef uint32_t vidType;  // vertex ID type
 constexpr vidType VID_MIN = 0;
 constexpr vidType VID_MAX = std::numeric_limits<vidType>::max();
 
