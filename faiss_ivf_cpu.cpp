@@ -71,9 +71,9 @@ int main(int argc, char** argv) {
     } else {
         std::cout << "Building IVF index from base: " << base_file << std::endl;
         if (format == "vecs")
-            xb = read_fvecs(base_file, nb, dim);
+            xb = read_vecs(base_file, nb, dim);
         else if (format == "bin")
-            xb = read_fbin(base_file, nb, dim);
+            xb = read_bin(base_file, nb, dim);
         else {
             std::cerr << "Error: unsupported format \"" << format << "\". Use 'vecs' or 'bin'.\n";
             return 1;
@@ -108,9 +108,9 @@ int main(int argc, char** argv) {
 
     // Load queries
     if (format == "bin") {
-        queries = read_fbin(query_file, nq, dim);
+        queries = read_bin(query_file, nq, dim);
     } else if (format == "vecs") {
-        queries = read_fvecs(query_file, nq, dim);
+        queries = read_vecs(query_file, nq, dim);
     } else {
         std::cerr << "file format unsupported\n";
         return 1;

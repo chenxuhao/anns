@@ -6,10 +6,11 @@ CUINCS=include/pqueue.cuh
 BIN=./bin/
 
 all: brute_force_cpu quantized_search_cpu ivf_flat_cpu parlayann_cpu
-ann-gpu: brute_force_gpu ivf_flat_gpu
+gpu: brute_force_gpu ivf_flat_gpu
+faiss: faiss_test faiss_ivf_cpu faiss_hnsw
 
-faiss_build_index:
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -I$(CONDA_PREFIX)/include -L$(CONDA_PREFIX)/lib faiss_build_index.cpp -o $@ -lfaiss
+faiss_test:
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -I$(CONDA_PREFIX)/include -L$(CONDA_PREFIX)/lib faiss_test.cpp -o $@ -lfaiss
 	mv $@ $(BIN)
 
 faiss_ivf_cpu:

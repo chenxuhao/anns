@@ -77,4 +77,3 @@ struct Graph {
     return VertexSet(adj_list+(eidType)maxDeg*v, maxDeg, v);
   }
 };
-

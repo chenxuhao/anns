@@ -13,11 +13,10 @@ int main(int argc, char** argv) {
                   << " [k: 100] <xxx.index> [metric: l2|ip] [beam_size: 128] [degree: 32]\n";
         return 1;
     }
-
-    std::string format = argv[1];
-    std::string base_path = argv[2];
-    std::string query_path = argv[3];
-    std::string gt_file = argv[4];
+    std::string format     = argv[1]; // bin or vecs
+    const char* base_file  = argv[2]; // data vectors
+    const char* query_file = argv[3]; // queries
+    const char* gt_file    = argv[4]; // groundtruth
     // optional
     int topk = (argc >= 6) ? std::stoi(argv[5]) : 100;
     const char* index_path = (argc >= 7) ? argv[6] : nullptr;
@@ -47,17 +46,17 @@ int main(int argc, char** argv) {
         dim = index->d;
         nb = index->ntotal;
     } else {
-        std::cout << "Building HNSW index from base: " << base_path << std::endl;
+        std::cout << "Building HNSW index from base: " << base_file << std::endl;
         if (format == "bvecs") {
-            xb_u8 = read_vecs<uint8_t>(base_path.c_str(), nb, dim);
+            xb_u8 = read_vecs<uint8_t>(base_file, nb, dim);
             xb = new float[nb * dim];
             for (size_t i = 0; i < nb * dim; ++i) xb[i] = static_cast<float>(xb_u8[i]);
         } else if (format == "vecs") {
-            xb = read_vecs(base_path.c_str(), nb, dim);
+            xb = read_vecs(base_file, nb, dim);
         } else if (format == "bin") {
-            xb = read_bin(base_path.c_str(), nb, dim);
+            xb = read_bin(base_file, nb, dim);
         } else if (format == "u8bin") {
-            xb_u8 = read_bin<uint8_t>(base_path.c_str(), nb, dim);
+            xb_u8 = read_bin<uint8_t>(base_file, nb, dim);
             xb = new float[nb * dim];
             for (size_t i = 0; i < nb * dim; ++i) xb[i] = static_cast<float>(xb_u8[i]);
         } else {
@@ -84,15 +83,15 @@ int main(int argc, char** argv) {
 
     // Load queries
     if (format == "bvecs") {
-        xq_u8 = read_vecs<uint8_t>(query_path.c_str(), nq, dim);
+        xq_u8 = read_vecs<uint8_t>(query_file, nq, dim);
         xq = new float[nq * dim];
         for (size_t i = 0; i < nq * dim; ++i) xq[i] = static_cast<float>(xq_u8[i]);
     } else if (format == "vecs")
-        xq = read_vecs(query_path.c_str(), nq, dim);
+        xq = read_vecs(query_file, nq, dim);
     else if (format == "bin")
-        xq = read_bin(query_path.c_str(), nq, dim);
+        xq = read_bin(query_file, nq, dim);
     else if (format == "u8bin") {
-        xq_u8 = read_bin<uint8_t>(query_path.c_str(), nq, dim);
+        xq_u8 = read_bin<uint8_t>(query_file, nq, dim);
         xq = new float[nq * dim];
         for (size_t i = 0; i < nq * dim; ++i) xq[i] = static_cast<float>(xq_u8[i]);
     } else {
@@ -116,9 +115,9 @@ int main(int argc, char** argv) {
     int* groundtruth;
     size_t gt_k, nq_gt;
     if (format == "bin" || format == "u8bin") {
-        groundtruth = read_ibin(gt_file.c_str(), nq_gt, gt_k);
+        groundtruth = read_ibin(gt_file, nq_gt, gt_k);
     } else if (format == "vecs" || format == "bvecs") {
-        groundtruth = read_ivecs(gt_file.c_str(), nq_gt, gt_k);
+        groundtruth = read_ivecs(gt_file, nq_gt, gt_k);
     } else {
         std::cerr << "file format unsupported\n";
         return 1;
