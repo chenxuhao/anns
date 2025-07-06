@@ -28,10 +28,31 @@ int main(int argc, char** argv) {
     std::cout << "Beam size: "  << beam_size << "\n";
     std::cout << "Graph degree: "  << degree << "\n";
 
-    size_t nb = 0, dim = 0, nq = 0;
-    float* xb = nullptr, *xq = nullptr;
-    uint8_t* xb_u8 = nullptr, *xq_u8 = nullptr;
+    std::cout << "Loading queries...\n";
+    size_t dim2 = 0, nq = 0;
+    float* xq = nullptr;
+    uint8_t *xq_u8 = nullptr;
+    if (format == "bvecs") {
+        xq_u8 = read_vecs<uint8_t>(query_file, nq, dim2);
+        xq = new float[nq * dim2];
+        for (size_t i = 0; i < nq * dim2; ++i) xq[i] = static_cast<float>(xq_u8[i]);
+    } else if (format == "vecs")
+        xq = read_vecs(query_file, nq, dim2);
+    else if (format == "bin")
+        xq = read_bin(query_file, nq, dim2);
+    else if (format == "u8bin") {
+        xq_u8 = read_bin<uint8_t>(query_file, nq, dim2);
+        xq = new float[nq * dim2];
+        for (size_t i = 0; i < nq * dim2; ++i) xq[i] = static_cast<float>(xq_u8[i]);
+    } else {
+        std::cerr << "Error: unsupported format \"" << format << "\". Use 'vecs' or 'bin'." << std::endl;
+        return 1;
+    }
+    std::cout << "Num queries: "  << nq << "\n";
 
+    size_t nb = 0, dim = 0;
+    float* xb = nullptr;
+    uint8_t* xb_u8 = nullptr;
     faiss::IndexHNSWFlat* index = nullptr;
 
     // Load or build index
@@ -79,30 +100,12 @@ int main(int argc, char** argv) {
         delete [] xb_u8;
         delete [] xb;
     }
+    assert(dim == dim2);
     std::cout << "Loaded " << nb << " vectors of dimension " << dim << std::endl;
 
-    // Load queries
-    if (format == "bvecs") {
-        xq_u8 = read_vecs<uint8_t>(query_file, nq, dim);
-        xq = new float[nq * dim];
-        for (size_t i = 0; i < nq * dim; ++i) xq[i] = static_cast<float>(xq_u8[i]);
-    } else if (format == "vecs")
-        xq = read_vecs(query_file, nq, dim);
-    else if (format == "bin")
-        xq = read_bin(query_file, nq, dim);
-    else if (format == "u8bin") {
-        xq_u8 = read_bin<uint8_t>(query_file, nq, dim);
-        xq = new float[nq * dim];
-        for (size_t i = 0; i < nq * dim; ++i) xq[i] = static_cast<float>(xq_u8[i]);
-    } else {
-        std::cerr << "Error: unsupported format \"" << format << "\". Use 'vecs' or 'bin'." << std::endl;
-        return 1;
-    }
-    std::cout << "Num queries: "  << nq << "\n";
     // Allocate result arrays
     std::vector<faiss::idx_t> I(nq * topk);
     std::vector<float> D(nq * topk);
-
     index->hnsw.efSearch = beam_size;
     ctimer_t t;
     ctimer_start(&t);
@@ -139,8 +142,7 @@ int main(int argc, char** argv) {
     std::cout << "Estimated distance computations: " << est_dists << "\n\n";
 
     delete[] xq;
-    if (xb) delete[] xb;
+    delete[] groundtruth;
     delete index;
-
     return 0;
 }

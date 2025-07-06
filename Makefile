@@ -13,8 +13,8 @@ faiss_test:
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -I$(CONDA_PREFIX)/include -L$(CONDA_PREFIX)/lib faiss_test.cpp -o $@ -lfaiss
 	mv $@ $(BIN)
 
-faiss_ivf_cpu:
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -I$(CONDA_PREFIX)/include -L$(CONDA_PREFIX)/lib faiss_ivf_cpu.cpp -o $@ -lfaiss
+faiss_ivf_flat:
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -I$(CONDA_PREFIX)/include -L$(CONDA_PREFIX)/lib faiss_ivf_flat.cpp -o $@ -lfaiss
 	mv $@ $(BIN)
 
 faiss_hnsw:

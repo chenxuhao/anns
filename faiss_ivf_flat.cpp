@@ -6,33 +6,6 @@
 #include "utils.h"
 #include "ctimer.h"
 
-struct NListEntry {
-    size_t nb;
-    size_t nlist;
-};
-
-const NListEntry nlist_table[] = {
-    {1'000'000,     1024},     // sqrt(1e6) ≈ 1,000 → round to 1024
-    {2'000'000,     2048},     // sqrt(2e6) ≈ 1414 → round to 2048
-    {5'000'000,     2048},     // sqrt(5e6) ≈ 2236 → round to 2048
-    {10'000'000,    4096},     // sqrt(1e7) ≈ 3162 → round to 4096
-    {20'000'000,    4096},     // sqrt(2e7) ≈ 4472 → round to 4096
-    {50'000'000,    8192},     // sqrt(5e7) ≈ 7071 → round to 8192
-    {100'000'000,   16384},    // sqrt(1e8) ≈ 10,000 → round to 16K
-    {200'000'000,   16384},    // sqrt(2e8) ≈ 14,142 → round to 16K
-    {500'000'000,   32768},    // sqrt(5e8) ≈ 22,360
-    {1'000'000'000, 32768},    // sqrt(1e9) ≈ 31,622 → round to 32K
-};
-
-inline int lookup_nlist(size_t nb) {
-    for (const auto& entry : nlist_table) {
-        if (nb <= entry.nb) {
-            return entry.nlist;
-        }
-    }
-    return 65536;
-}
-
 int main(int argc, char** argv) {
     if (argc < 5) {
         std::cerr << "Usage: " << argv[0] 
@@ -53,33 +26,43 @@ int main(int argc, char** argv) {
     std::cout << "Using " << metric << " distance metric\n";
     std::cout << "# clusters to search: "  << nclusters << "\n";
 
-    size_t dim = 0, nq = 0, nb = 0;
-    float* queries = nullptr, *xb = nullptr;
+    // Load queries
+    float* queries = nullptr;
+    size_t dim2 = 0, nq = 0;
+    if (format == "bin") {
+        queries = read_bin(query_file, nq, dim2);
+    } else if (format == "vecs") {
+        queries = read_fvecs(query_file, nq, dim2);
+    } else {
+        std::cerr << "file format unsupported\n";
+        return 1;
+    }
+    std::cout << "Num queries: "  << nq << "\n";
+    assert(queries);
+
+    size_t dim = 0, nb = 0;
+    float* xb = nullptr;
     faiss::IndexIVFFlat* index = nullptr;
+    faiss::IndexFlatL2 quantizer(dim2);
     
     // Load or build index
     if (index_file && std::ifstream(index_file).good()) {
         std::cout << "Loading IVF index from: " << index_file << std::endl;
         auto base_index = faiss::read_index(index_file);
         index = dynamic_cast<faiss::IndexIVFFlat*>(base_index);
-        if (index) {
-            index->nprobe = nclusters;
-            std::cout << "Set nprobe as " << nclusters << "\n";
-        }
         nb = index->ntotal;
         dim = index->d;
     } else {
         std::cout << "Building IVF index from base: " << base_file << std::endl;
-        if (format == "vecs")
-            xb = read_vecs(base_file, nb, dim);
-        else if (format == "bin")
+        if (format == "vecs") {
+            xb = read_fvecs(base_file, nb, dim);
+        } else if (format == "bin") {
             xb = read_bin(base_file, nb, dim);
-        else {
+        } else {
             std::cerr << "Error: unsupported format \"" << format << "\". Use 'vecs' or 'bin'.\n";
             return 1;
         }
         size_t nlist = lookup_nlist(nb);
-        faiss::IndexFlatL2 quantizer(dim);
         if (metric == "l2") {
             // IVF index (L2 metric, with flat quantizer)
             index = new faiss::IndexIVFFlat(&quantizer, dim, nlist, faiss::METRIC_L2);
@@ -102,23 +85,16 @@ int main(int argc, char** argv) {
         }
         delete [] xb;
     }
+    assert(dim == dim2);
     std::cout << "Loaded " << nb << " vectors of dimension " << dim << std::endl;
     std::cout << "Total # clusters: " << index->nlist << "\n";
     std::cout << "Avg cluster size: " << nb / index->nlist << "\n";
 
-    // Load queries
-    if (format == "bin") {
-        queries = read_bin(query_file, nq, dim);
-    } else if (format == "vecs") {
-        queries = read_vecs(query_file, nq, dim);
-    } else {
-        std::cerr << "file format unsupported\n";
-        return 1;
-    }
-    std::cout << "Num queries: "  << nq << "\n";
     // Allocate result arrays
     std::vector<faiss::idx_t> I(nq * topk);
     std::vector<float> D(nq * topk);
+    index->nprobe = nclusters;
+    std::cout << "Set nprobe as " << nclusters << "\n";
 
     ctimer_t t;
     ctimer_start(&t);
@@ -158,5 +134,6 @@ int main(int argc, char** argv) {
     delete[] groundtruth;
     delete[] queries;
     delete index;
+
     return 0;
 }

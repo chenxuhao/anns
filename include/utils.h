@@ -33,7 +33,7 @@ T* read_vecs(const char* filename, size_t& n_out, size_t& dim) {
         input.read((char*)(data + i * d), sizeof(T) * d);
     }
     n_out = num;
-    std::cout << "nb: " << num << std::endl;
+    input.close();
     return data;
 }
 
@@ -55,6 +55,31 @@ int* read_ivecs(const char* filename, size_t& n_out, size_t& d_out) {
         input.read((char*)&dim, sizeof(int));
         assert(dim == d);
         input.read((char*)(data + i * d), sizeof(int) * d);
+    }
+
+    d_out = d;
+    n_out = num;
+    return data;
+}
+
+inline
+float* read_fvecs(const char* filename, size_t& n_out, size_t& d_out) {
+    std::ifstream input(filename, std::ios::binary);
+    if (!input) throw std::runtime_error("Cannot open fvecs file");
+
+    int d;
+    input.read((char*)&d, sizeof(int));
+    input.seekg(0, std::ios::end);
+    size_t file_size = input.tellg();
+    input.seekg(0, std::ios::beg);
+    size_t num = file_size / (d * sizeof(float) + sizeof(int));
+    float* data = new float[num * d];
+
+    for (size_t i = 0; i < num; ++i) {
+        int dim;
+        input.read((char*)&dim, sizeof(int));
+        assert(dim == d);
+        input.read((char*)(data + i * d), sizeof(float) * d);
     }
 
     d_out = d;
@@ -153,19 +178,12 @@ void write_ibin(const char* filename, const int* data, size_t n, size_t d) {
 inline
 float compute_recall(const idx_t* predicted, const int* groundtruth,
                      size_t nq, int topk, int gt_k) {
-    //idx_t max_pred = 0; int max_gt = 0;
-    //for (size_t i = 0; i < nq*size_t(topk); i++) max_pred = std::max(max_pred, predicted[i]);
-    //for (size_t i = 0; i < nq*size_t(gt_k); i++) max_gt = std::max(max_gt, groundtruth[i]);
-    //std::cout << "max_pred=" << max_pred << " max_gt=" << max_gt << std::endl;
-
     size_t correct = 0;
     for (size_t i = 0; i < nq; ++i) {
         for (int j = 0; j < topk; ++j) {
             int pred = predicted[i * topk + j];
-            //if (i<10 && j<3) std::cout << "pred[" << i << "][" << j << "]=" << pred << "\n";
             for (int k = 0; k < gt_k; ++k) {
                 int gt = groundtruth[i * gt_k + k];
-                //if (j == 0 && i<10 && k<3) std::cout << "gt[" << i << "][" << k << "]=" << gt << "\n";
                 if (pred == gt) {
                     ++correct;
                     break;
@@ -174,4 +192,32 @@ float compute_recall(const idx_t* predicted, const int* groundtruth,
         }
     }
     return float(correct) / (nq * topk);
+}
+
+struct NListEntry {
+    size_t nb;
+    size_t nlist;
+};
+
+const NListEntry nlist_table[] = {
+    {10'000,        128},      // sqrt(1e6) ≈ 1,000 → round to 1024
+    {1'000'000,     1024},     // sqrt(1e6) ≈ 1,000 → round to 1024
+    {2'000'000,     2048},     // sqrt(2e6) ≈ 1414 → round to 2048
+    {5'000'000,     2048},     // sqrt(5e6) ≈ 2236 → round to 2048
+    {10'000'000,    4096},     // sqrt(1e7) ≈ 3162 → round to 4096
+    {20'000'000,    4096},     // sqrt(2e7) ≈ 4472 → round to 4096
+    {50'000'000,    8192},     // sqrt(5e7) ≈ 7071 → round to 8192
+    {100'000'000,   16384},    // sqrt(1e8) ≈ 10,000 → round to 16K
+    {200'000'000,   16384},    // sqrt(2e8) ≈ 14,142 → round to 16K
+    {500'000'000,   32768},    // sqrt(5e8) ≈ 22,360
+    {1'000'000'000, 32768},    // sqrt(1e9) ≈ 31,622 → round to 32K
+};
+
+inline int lookup_nlist(size_t nb) {
+    for (const auto& entry : nlist_table) {
+        if (nb <= entry.nb) {
+            return entry.nlist;
+        }
+    }
+    return 65536;
 }
